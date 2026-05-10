@@ -1,0 +1,16 @@
+{
+  "name": "MenuYa",
+  "short_name": "MenuYa",
+  "description": "Pedidos online simples para restaurantes locales.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#ff5a5f",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

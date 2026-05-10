@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(255, 90, 95, 0.10), transparent 32rem),
+    linear-gradient(180deg, #fffaf7 0%, #f8fafc 46%, #ffffff 100%);
+  color: #0f172a;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer utilities {
+  .animate-soft-in {
+    animation: soft-in 520ms ease-out both;
+  }
+
+  .hover-lift {
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease,
+      border-color 180ms ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes soft-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
