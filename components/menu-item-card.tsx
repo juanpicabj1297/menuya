@@ -11,7 +11,7 @@ type MenuItemCardProps = {
     id: string;
     name: string;
     slug: string;
-    phone: string;
+    phone: string | null;
   };
 };
 
@@ -59,7 +59,7 @@ export function MenuItemCard({ item, restaurant }: MenuItemCardProps) {
                 restaurantId: restaurant.id,
                 restaurantName: restaurant.name,
                 restaurantSlug: restaurant.slug,
-                restaurantPhone: restaurant.phone
+                restaurantPhone: restaurant.phone ?? ""
               })
             }
             onDecrement={() => decrement(item.id)}

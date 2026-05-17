@@ -8,17 +8,21 @@ export const fallbackRestaurants: RestaurantWithMenu[] = [
     category: "Pizzas y empanadas",
     phone: "5492324550000",
     isOpen: true,
+    scheduleStatus: "unknown",
+    scheduleLabel: "Consultar horario",
+    scheduleHint: null,
     deliveryTime: "30-45 min",
-    minimumOrder: "Pedido minimo $6.000",
     rating: "4.8",
     cover:
       "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=900&q=80",
+    logoUrl: "/restaurants/la-esquina-logo.svg",
     tags: ["Familiar", "Delivery propio", "Mas pedido"],
     city: {
       name: "Suipacha",
       province: "Buenos Aires",
       slug: "suipacha"
     },
+    hours: [],
     menu: [
       {
         id: "demo-pizza-muzzarella",
@@ -49,17 +53,21 @@ export const fallbackRestaurants: RestaurantWithMenu[] = [
     category: "Hamburguesas",
     phone: "5492324550001",
     isOpen: true,
+    scheduleStatus: "unknown",
+    scheduleLabel: "Consultar horario",
+    scheduleHint: null,
     deliveryTime: "25-40 min",
-    minimumOrder: "Pedido minimo $7.500",
     rating: "4.7",
     cover:
       "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=80",
+    logoUrl: "/restaurants/burger-suipacha-logo.svg",
     tags: ["Rapido", "Combos", "Abierto"],
     city: {
       name: "Suipacha",
       province: "Buenos Aires",
       slug: "suipacha"
     },
+    hours: [],
     menu: [
       {
         id: "demo-hamburguesa-completa",
@@ -90,17 +98,21 @@ export const fallbackRestaurants: RestaurantWithMenu[] = [
     category: "Minutas y platos del dia",
     phone: "5492324550002",
     isOpen: true,
+    scheduleStatus: "unknown",
+    scheduleLabel: "Consultar horario",
+    scheduleHint: null,
     deliveryTime: "35-50 min",
-    minimumOrder: "Pedido minimo $5.500",
     rating: "4.6",
     cover:
       "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=900&q=80",
+    logoUrl: "/restaurants/rotiseria-centro-logo.svg",
     tags: ["Casero", "Retiro", "Menu del dia"],
     city: {
       name: "Suipacha",
       province: "Buenos Aires",
       slug: "suipacha"
     },
+    hours: [],
     menu: [
       {
         id: "demo-milanesa-papas",

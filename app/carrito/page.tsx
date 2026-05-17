@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { MouseEvent, useMemo, useState } from "react";
 import {
   ArrowLeft,
   CreditCard,
@@ -57,6 +57,7 @@ export default function CartPage() {
         phone: items[0].restaurantPhone ?? ""
       }
     : null;
+  const restaurantPhone = normalizeWhatsappPhone(restaurant?.phone ?? "");
 
   const whatsappMessage = useMemo(() => {
     const productLines = items
@@ -97,6 +98,32 @@ export default function CartPage() {
     restaurant?.name,
     totalPrice
   ]);
+
+  const whatsappHref = restaurantPhone
+    ? `https://wa.me/${restaurantPhone}?text=${encodeURIComponent(
+        whatsappMessage
+      )}`
+    : "";
+
+  function getValidationError() {
+    if (!restaurant || items.length === 0) {
+      return "Agrega al menos un producto para confirmar el pedido.";
+    }
+
+    if (!restaurantPhone) {
+      return "Este restaurante no tiene numero de WhatsApp cargado.";
+    }
+
+    if (!customerName.trim() || !customerPhone.trim()) {
+      return "Completa tu nombre y telefono para que el local pueda responder.";
+    }
+
+    if (fulfillmentType === "delivery" && !address.trim()) {
+      return "Completa la direccion para el delivery del local.";
+    }
+
+    return "";
+  }
 
   async function saveOrder() {
     if (!restaurant || !uuidPattern.test(restaurant.id)) {
@@ -140,22 +167,13 @@ export default function CartPage() {
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleWhatsappClick(event: MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
     setError("");
 
-    if (!restaurant || items.length === 0) {
-      setError("Agrega al menos un producto para confirmar el pedido.");
-      return;
-    }
-
-    if (!customerName.trim() || !customerPhone.trim()) {
-      setError("Completá tu nombre y teléfono para que el local pueda responder.");
-      return;
-    }
-
-    if (fulfillmentType === "delivery" && !address.trim()) {
-      setError("Completá la dirección para el delivery del local.");
+    const validationError = getValidationError();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -166,12 +184,8 @@ export default function CartPage() {
     } catch {
       // El pedido igualmente puede enviarse por WhatsApp si Supabase falla.
     } finally {
-      const phone = normalizeWhatsappPhone(restaurant.phone);
-      const url = `https://wa.me/${phone}?text=${encodeURIComponent(
-        whatsappMessage
-      )}`;
       clearCart();
-      window.location.href = url;
+      window.location.assign(whatsappHref);
     }
   }
 
@@ -201,7 +215,7 @@ export default function CartPage() {
         </p>
       </header>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <form className="mt-6 space-y-4">
         <section className="rounded-2xl border border-white bg-white p-4 shadow-card">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -330,7 +344,7 @@ export default function CartPage() {
               </span>
             </button>
           </div>
-          <div className="mt-4 rounded-2xl bg-mint-50 p-3 text-sm font-semibold text-mint-700">
+          <div className="mt-4 rounded-2xl bg-brand-50 p-3 text-sm font-semibold text-brand-700">
             <ShieldCheck className="mr-2 inline" size={17} />
             MenuYa no usa GPS. El local recibe los datos escritos.
           </div>
@@ -397,13 +411,19 @@ export default function CartPage() {
           </div>
         )}
 
-        <button
-          disabled={items.length === 0 || isSubmitting}
-          className="sticky bottom-4 z-10 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-4 font-black text-white shadow-soft transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+        <a
+          href={whatsappHref || "#"}
+          onClick={handleWhatsappClick}
+          aria-disabled={items.length === 0 || isSubmitting || !restaurantPhone}
+          className={`sticky bottom-4 z-10 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 font-black text-white shadow-soft transition ${
+            items.length === 0 || isSubmitting || !restaurantPhone
+              ? "cursor-not-allowed bg-slate-300 shadow-none"
+              : "bg-brand-600 hover:bg-brand-700"
+          }`}
         >
           <MessageCircle size={20} />
           {isSubmitting ? "Preparando pedido..." : "Confirmar por WhatsApp"}
-        </button>
+        </a>
       </form>
     </main>
   );

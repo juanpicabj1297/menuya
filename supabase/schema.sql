@@ -16,16 +16,29 @@ create table public.restaurant_profiles (
   slug text not null unique,
   description text,
   phone text,
+  whatsapp text,
   address text,
   category text,
   image_url text,
+  logo_url text,
   rating numeric(2,1) check (rating >= 0 and rating <= 5),
   tags text[] not null default '{}',
   is_open boolean not null default false,
   delivery_enabled boolean not null default true,
   pickup_enabled boolean not null default true,
-  minimum_order integer not null default 0,
+  manual_is_open boolean,
   estimated_time text,
+  created_at timestamptz not null default now(),
+  unique (owner_user_id)
+);
+
+create table public.categorias_globales_menu (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  icon_name text,
+  sort_order integer not null default 0,
+  is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -46,8 +59,31 @@ create table public.menu_items (
   image_url text,
   price integer not null check (price >= 0),
   is_available boolean not null default true,
+  is_featured boolean not null default false,
   created_at timestamptz not null default now(),
   unique (restaurant_id, name)
+);
+
+create table public.horarios_restaurantes (
+  id uuid primary key default gen_random_uuid(),
+  restaurante uuid not null references public.restaurant_profiles(id) on delete cascade,
+  dia_semana text not null check (
+    dia_semana in (
+      'lunes',
+      'martes',
+      'miercoles',
+      'miércoles',
+      'jueves',
+      'viernes',
+      'sabado',
+      'sábado',
+      'domingo'
+    )
+  ),
+  horario_apertura time not null,
+  horario_cierre time not null,
+  created_at timestamptz not null default now(),
+  unique (restaurante, dia_semana, horario_apertura, horario_cierre)
 );
 
 create type public.order_status as enum (
@@ -85,8 +121,10 @@ create table public.order_items (
 
 alter table public.cities enable row level security;
 alter table public.restaurant_profiles enable row level security;
+alter table public.categorias_globales_menu enable row level security;
 alter table public.menu_categories enable row level security;
 alter table public.menu_items enable row level security;
+alter table public.horarios_restaurantes enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 
@@ -97,6 +135,10 @@ using (true);
 create policy "Anyone can read restaurants"
 on public.restaurant_profiles for select
 using (true);
+
+create policy "Anyone can read active global categories"
+on public.categorias_globales_menu for select
+using (is_active = true);
 
 create policy "Owners can manage their restaurant"
 on public.restaurant_profiles for all
@@ -128,6 +170,10 @@ create policy "Anyone can read available menu items"
 on public.menu_items for select
 using (is_available = true);
 
+create policy "Anyone can read restaurant hours"
+on public.horarios_restaurantes for select
+using (true);
+
 create policy "Owners can manage menu items"
 on public.menu_items for all
 using (
@@ -141,6 +187,23 @@ with check (
   exists (
     select 1 from public.restaurant_profiles restaurants
     where restaurants.id = restaurant_id
+    and restaurants.owner_user_id = auth.uid()
+  )
+);
+
+create policy "Owners can manage restaurant hours"
+on public.horarios_restaurantes for all
+using (
+  exists (
+    select 1 from public.restaurant_profiles restaurants
+    where restaurants.id = restaurante
+    and restaurants.owner_user_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1 from public.restaurant_profiles restaurants
+    where restaurants.id = restaurante
     and restaurants.owner_user_id = auth.uid()
   )
 );

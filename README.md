@@ -82,12 +82,18 @@ supabase/migrations/001_public_catalog_fields.sql
 supabase/migrations/002_allow_unclaimed_demo_restaurants.sql
 supabase/migrations/003_seed_contract_constraints.sql
 supabase/migrations/004_checkout_payment_method.sql
+supabase/migrations/005_menuya_identity_home.sql
+supabase/migrations/006_remove_minimum_order.sql
+supabase/migrations/007_restaurant_hours.sql
+supabase/migrations/008_restaurant_panel.sql
 ```
 
 Esas migraciones agregan los campos visuales que usa MenuYa, permiten
 restaurantes demo sin usuario asignado, crean restricciones para que el seed
-pueda actualizar datos sin duplicarlos y agregan el metodo de pago simple al
-pedido.
+pueda actualizar datos sin duplicarlos, agregan el metodo de pago simple al
+pedido, suman `logo_url` junto con las categorias globales del home, eliminan
+la columna `minimum_order` que ya no usa la experiencia actual y agregan
+horarios reales de restaurantes.
 
 ### 4.1. Cargar datos demo
 

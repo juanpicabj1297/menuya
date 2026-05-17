@@ -1,10 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock3, Star } from "lucide-react";
+import { ArrowLeft, CalendarDays, Clock3, Star } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CartLink } from "@/components/cart-link";
 import { MenuItemCard } from "@/components/menu-item-card";
+import { RestaurantLogo } from "@/components/restaurant-logo";
 import { getRestaurantWithMenu } from "@/lib/restaurants";
 
 type Props = {
@@ -42,6 +43,26 @@ export default async function RestaurantMenuPage({ params }: Props) {
       }
     ];
   }, []);
+  const hoursByDay = restaurant.hours.reduce<
+    { day: string; intervals: string[]; order: number }[]
+  >((groups, hour) => {
+    const interval = `${hour.openTime}-${hour.closeTime}`;
+    const group = groups.find((current) => current.day === hour.dayLabel);
+
+    if (group) {
+      group.intervals.push(interval);
+      return groups;
+    }
+
+    return [
+      ...groups,
+      {
+        day: hour.dayLabel,
+        intervals: [interval],
+        order: hour.dayOfWeek
+      }
+    ];
+  }, []);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-28 pt-4 sm:px-6">
@@ -56,7 +77,7 @@ export default async function RestaurantMenuPage({ params }: Props) {
         </Link>
       </nav>
 
-      <header className="animate-soft-in overflow-hidden rounded-[1.7rem] border border-white bg-white shadow-card">
+      <header className="animate-soft-in overflow-hidden rounded-[1.7rem] border border-neutral-200 bg-white shadow-card">
         <div className="relative h-56 sm:h-72">
           <Image
             src={restaurant.cover}
@@ -66,36 +87,86 @@ export default async function RestaurantMenuPage({ params }: Props) {
             sizes="(min-width: 1024px) 896px, 100vw"
             className="h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-            <p className="text-sm font-bold text-white/80">
-              {restaurant.category}
-            </p>
-            <h1 className="mt-1 text-4xl font-black tracking-tight">
-              {restaurant.name}
-            </h1>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs font-black">
-              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1.5 text-amber-700">
-                <Star size={13} fill="currentColor" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/55 via-transparent to-transparent" />
+        </div>
+        <div className="relative px-5 pb-5 pt-0">
+          <div className="-mt-12 mb-3">
+            <RestaurantLogo
+              name={restaurant.name}
+              logoUrl={restaurant.logoUrl}
+              size="lg"
+            />
+          </div>
+          <p className="text-sm font-bold text-neutral-500">
+            {restaurant.category}
+          </p>
+          <h1 className="mt-1 text-4xl font-black tracking-tight text-ink-950">
+            {restaurant.name}
+          </h1>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-black">
+            {restaurant.rating && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1.5 text-ink-950">
+                <Star size={13} className="text-brand-600" fill="currentColor" />
                 {restaurant.rating}
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1.5 backdrop-blur">
-                <Clock3 size={13} />
-                {restaurant.deliveryTime}
-              </span>
-              <span className="rounded-full bg-white/15 px-2.5 py-1.5 backdrop-blur">
-                {restaurant.minimumOrder}
-              </span>
-            </div>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1.5 text-ink-950">
+              <Clock3 size={13} />
+              {restaurant.deliveryTime}
+            </span>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 ${
+                restaurant.scheduleStatus === "open"
+                  ? "bg-brand-50 text-brand-700"
+                  : "bg-neutral-100 text-ink-950"
+              }`}
+            >
+              {restaurant.scheduleLabel}
+            </span>
           </div>
         </div>
       </header>
+
+      <section className="mt-5 rounded-[1.4rem] border border-neutral-200 bg-white p-4 shadow-card">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-2xl bg-neutral-100 text-ink-950">
+            <CalendarDays size={18} />
+          </span>
+          <div>
+            <h2 className="text-sm font-black text-ink-950">Horarios</h2>
+            <p className="text-xs font-semibold text-neutral-500">
+              {restaurant.scheduleHint ?? restaurant.scheduleLabel}
+            </p>
+          </div>
+        </div>
+        {hoursByDay.length === 0 ? (
+          <div className="rounded-2xl bg-neutral-50 px-3 py-3 text-sm font-semibold text-neutral-500">
+            Consultar horario
+          </div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {hoursByDay
+              .sort((a, b) => a.order - b.order)
+              .map((day) => (
+                <div
+                  key={day.day}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-neutral-50 px-3 py-3 text-sm"
+                >
+                  <span className="font-black text-ink-950">{day.day}</span>
+                  <span className="text-right font-semibold text-neutral-500">
+                    {day.intervals.join(" / ")}
+                  </span>
+                </div>
+              ))}
+          </div>
+        )}
+      </section>
 
       <section className="mt-5 flex gap-2 overflow-x-auto pb-1">
         {restaurant.tags.map((tag) => (
           <span
             key={tag}
-            className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm"
+            className="shrink-0 rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-bold text-neutral-600 shadow-sm"
           >
             {tag}
           </span>

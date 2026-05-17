@@ -1,8 +1,8 @@
 import Link from "next/link";
-import Image from "next/image";
-import { Clock3, MapPin, Search, SlidersHorizontal, Star } from "lucide-react";
+import { Clock3, MapPin, Search, SlidersHorizontal } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CartLink } from "@/components/cart-link";
+import { RestaurantLogo } from "@/components/restaurant-logo";
 import { getRestaurantsByCity } from "@/lib/restaurants";
 
 export default async function RestaurantsPage() {
@@ -56,48 +56,45 @@ export default async function RestaurantsPage() {
           <Link
             href={`/restaurantes/${restaurant.slug}`}
             key={restaurant.slug}
-            className="hover-lift overflow-hidden rounded-[1.4rem] border border-white bg-white shadow-card"
+            className="hover-lift rounded-[1.5rem] border border-neutral-200 bg-white p-4 shadow-card"
           >
-            <div className="relative h-44 overflow-hidden">
-              <Image
-                src={restaurant.cover}
-                alt={restaurant.name}
-                fill
-                sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                className="h-full w-full object-cover transition duration-500 hover:scale-105"
+            <div className="flex items-start gap-4">
+              <RestaurantLogo
+                name={restaurant.name}
+                logoUrl={restaurant.logoUrl}
+                size="lg"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 to-transparent" />
-              <div className="absolute left-3 top-3 rounded-full bg-white px-2.5 py-1 text-xs font-black text-mint-700 shadow-sm">
-                {restaurant.isOpen ? "Abierto" : "Cerrado"}
-              </div>
-              <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-black text-amber-700 shadow-sm">
-                <Star size={13} fill="currentColor" />
-                {restaurant.rating}
-              </div>
-            </div>
-            <div className="p-4">
-              <h2 className="text-lg font-black tracking-tight text-slate-950">
-                {restaurant.name}
-              </h2>
-              <p className="mt-1 text-sm font-medium text-slate-500">
-                {restaurant.category}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {restaurant.tags.map((tag) => (
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-black tracking-tight text-slate-950">
+                      {restaurant.name}
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      {restaurant.category}
+                    </p>
+                  </div>
                   <span
-                    key={tag}
-                    className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600"
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${
+                      restaurant.scheduleStatus === "open"
+                        ? "bg-brand-50 text-brand-700"
+                        : "bg-neutral-100 text-ink-950"
+                    }`}
                   >
-                    {tag}
+                    {restaurant.scheduleLabel}
                   </span>
-                ))}
-              </div>
-              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-sm font-bold text-slate-600">
-                <span className="inline-flex items-center gap-1.5">
-                  <Clock3 size={16} className="text-brand-600" />
-                  {restaurant.deliveryTime}
-                </span>
-                <span>{restaurant.minimumOrder}</span>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-600">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1.5">
+                    <Clock3 size={16} className="text-brand-600" />
+                    {restaurant.deliveryTime}
+                  </span>
+                  {restaurant.scheduleHint && (
+                    <span className="rounded-full bg-neutral-50 px-2.5 py-1.5 text-neutral-500">
+                      {restaurant.scheduleHint}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </Link>

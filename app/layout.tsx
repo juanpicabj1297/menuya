@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { CartProvider } from "@/components/cart-provider";
+import { AppProviders } from "@/components/app-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ff5a5f",
+  themeColor: "#A3E635",
   width: "device-width",
   initialScale: 1
 };
@@ -22,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="es-AR">
       <body>
-        <CartProvider>{children}</CartProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );
