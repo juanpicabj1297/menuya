@@ -18,6 +18,7 @@ type MenuItemCardProps = {
 export function MenuItemCard({ item, restaurant }: MenuItemCardProps) {
   const { getQuantity, increment, decrement } = useCart();
   const quantity = getQuantity(item.id);
+  const effectivePrice = item.discountPrice ?? item.price;
 
   return (
     <article
@@ -45,16 +46,24 @@ export function MenuItemCard({ item, restaurant }: MenuItemCardProps) {
           {item.description}
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-semibold text-slate-900">
-            ${item.price.toLocaleString("es-AR")}
-          </p>
+          <div>
+            <p className="font-semibold text-slate-900">
+              ${effectivePrice.toLocaleString("es-AR")}
+            </p>
+            {item.discountPrice && (
+              <p className="text-xs font-bold text-neutral-400 line-through">
+                ${item.price.toLocaleString("es-AR")}
+              </p>
+            )}
+          </div>
           <QuantityControl
+            compact
             quantity={quantity}
             onIncrement={() =>
               increment({
                 id: item.id,
                 name: item.name,
-                price: item.price,
+                price: effectivePrice,
                 image: item.image,
                 restaurantId: restaurant.id,
                 restaurantName: restaurant.name,

@@ -7,6 +7,24 @@ add column if not exists manual_is_open boolean;
 alter table public.menu_items
 add column if not exists is_featured boolean not null default false;
 
+alter table public.menu_items
+add column if not exists discount_price integer check (discount_price is null or discount_price >= 0);
+
+alter table public.menu_items
+add column if not exists promo_label text;
+
+alter table public.menu_items
+add column if not exists categoria_global_id uuid references public.categorias_globales_menu(id) on delete set null;
+
+create table if not exists public.restaurant_global_categories (
+  restaurant_id uuid not null references public.restaurant_profiles(id) on delete cascade,
+  categoria_global_id uuid not null references public.categorias_globales_menu(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (restaurant_id, categoria_global_id)
+);
+
+alter table public.restaurant_global_categories enable row level security;
+
 do $$
 begin
   if not exists (
@@ -18,6 +36,67 @@ begin
     add constraint restaurant_profiles_owner_user_id_key unique (owner_user_id);
   end if;
 end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'restaurant_global_categories'
+      and policyname = 'Anyone can read restaurant global categories'
+  ) then
+    create policy "Anyone can read restaurant global categories"
+    on public.restaurant_global_categories for select
+    using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'restaurant_global_categories'
+      and policyname = 'Owners can manage restaurant global categories'
+  ) then
+    create policy "Owners can manage restaurant global categories"
+    on public.restaurant_global_categories for all
+    using (
+      exists (
+        select 1 from public.restaurant_profiles restaurants
+        where restaurants.id = restaurant_id
+        and restaurants.owner_user_id = auth.uid()
+      )
+    )
+    with check (
+      exists (
+        select 1 from public.restaurant_profiles restaurants
+        where restaurants.id = restaurant_id
+        and restaurants.owner_user_id = auth.uid()
+      )
+    );
+  end if;
+end $$;
+
+create or replace function public.delete_current_restaurant_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid;
+begin
+  current_user_id := auth.uid();
+
+  if current_user_id is null then
+    raise exception 'No authenticated user';
+  end if;
+
+  delete from public.restaurant_profiles
+  where owner_user_id = current_user_id;
+
+  delete from auth.users
+  where id = current_user_id;
+end;
+$$;
 
 create or replace function public.create_restaurant_profile_for_new_user()
 returns trigger

@@ -17,8 +17,8 @@ export function QuantityControl({
 }: QuantityControlProps) {
   return (
     <div
-      className={`inline-flex items-center rounded-2xl border border-slate-200 bg-white shadow-sm transition ${
-        quantity > 0 ? "ring-2 ring-brand-100" : ""
+      className={`inline-flex w-fit items-center rounded-full border border-neutral-200 bg-white shadow-sm transition ${
+        quantity > 0 ? "border-brand-200 bg-brand-50/50" : ""
       }`}
     >
       <button
@@ -26,16 +26,16 @@ export function QuantityControl({
         onClick={onDecrement}
         disabled={quantity === 0}
         aria-label="Disminuir cantidad"
-        className={`grid place-items-center rounded-2xl text-slate-700 transition active:scale-95 disabled:cursor-not-allowed disabled:text-slate-300 ${
-          compact ? "h-9 w-9" : "h-11 w-11"
+        className={`grid place-items-center rounded-full text-slate-700 transition active:scale-95 disabled:cursor-not-allowed disabled:text-slate-300 ${
+          compact ? "h-8 w-8" : "h-10 w-10"
         }`}
       >
-        <Minus size={compact ? 15 : 17} />
+        <Minus size={compact ? 14 : 16} />
       </button>
       <span
-        className={`grid min-w-9 place-items-center text-center font-black text-slate-950 transition ${
-          quantity > 0 ? "scale-110 text-brand-700" : ""
-        }`}
+        className={`grid place-items-center px-2 text-center text-sm font-black text-slate-950 transition ${
+          compact ? "min-w-7" : "min-w-9"
+        } ${quantity > 0 ? "text-brand-700" : ""}`}
         aria-live="polite"
       >
         {quantity}
@@ -44,11 +44,11 @@ export function QuantityControl({
         type="button"
         onClick={onIncrement}
         aria-label="Aumentar cantidad"
-        className={`grid place-items-center rounded-2xl bg-slate-950 text-white transition active:scale-95 ${
-          compact ? "h-9 w-9" : "h-11 w-11"
+        className={`grid place-items-center rounded-full bg-ink-950 text-white transition active:scale-95 ${
+          compact ? "h-8 w-8" : "h-10 w-10"
         }`}
       >
-        <Plus size={compact ? 15 : 17} />
+        <Plus size={compact ? 14 : 16} />
       </button>
     </div>
   );

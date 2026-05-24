@@ -2,36 +2,21 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowRight,
-  Beef,
-  CupSoda,
   HeartHandshake,
   MapPin,
-  Pizza,
   Search,
-  Utensils
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CartLink } from "@/components/cart-link";
+import { CategoryIcon } from "@/components/category-icon";
 import { HeroCarousel } from "@/components/hero-carousel";
+import { RestaurantLogoOverlay } from "@/components/restaurant-logo-overlay";
 import { RestaurantLogo } from "@/components/restaurant-logo";
 import {
   getFeaturedMenuItems,
   getFeaturedRestaurants,
   getGlobalCategories
 } from "@/lib/restaurants";
-
-function CategoryIcon({ iconName }: { iconName: string }) {
-  const iconClass = "h-5 w-5";
-  const icons = {
-    pizza: <Pizza className={iconClass} />,
-    burger: <Beef className={iconClass} />,
-    empanada: <Utensils className={iconClass} />,
-    drink: <CupSoda className={iconClass} />,
-    utensils: <Utensils className={iconClass} />
-  };
-
-  return icons[iconName as keyof typeof icons] ?? icons.utensils;
-}
 
 export default async function HomePage() {
   const [restaurants, categories, featuredItems] = await Promise.all([
@@ -116,7 +101,7 @@ export default async function HomePage() {
             {categories.map((category) => (
               <Link
                 key={category.id}
-                href="/restaurantes"
+                href={`/categorias/${category.slug}`}
                 className="min-w-28 rounded-[1.4rem] border border-neutral-200 bg-white p-4 text-center shadow-card transition hover:-translate-y-0.5 hover:border-brand-500"
               >
                 <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-neutral-100 text-ink-950">
@@ -210,22 +195,10 @@ export default async function HomePage() {
                     className="object-cover"
                   />
                   <div className="absolute bottom-3 left-3">
-                    {item.restaurantLogoUrl ? (
-                      <div className="relative h-11 w-11 overflow-hidden rounded-full border-2 border-white bg-white shadow-card">
-                        <Image
-                          src={item.restaurantLogoUrl}
-                          alt={`${item.restaurantName ?? "Restaurante"} logo`}
-                          fill
-                          sizes="44px"
-                          className="object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="grid h-11 w-11 place-items-center rounded-full border-2 border-white bg-ink-950 text-base font-black text-brand-500 shadow-card">
-                        {(item.restaurantName ?? "M").trim().charAt(0).toUpperCase() ||
-                          "M"}
-                      </div>
-                    )}
+                    <RestaurantLogoOverlay
+                      logoUrl={item.restaurantLogoUrl}
+                      restaurantName={item.restaurantName}
+                    />
                   </div>
                 </div>
                 <div className="p-4">
@@ -239,8 +212,13 @@ export default async function HomePage() {
                     {item.description}
                   </p>
                   <p className="mt-3 font-black text-ink-950">
-                    ${item.price.toLocaleString("es-AR")}
+                    ${(item.discountPrice ?? item.price).toLocaleString("es-AR")}
                   </p>
+                  {item.discountPrice && (
+                    <p className="text-xs font-bold text-neutral-400 line-through">
+                      ${item.price.toLocaleString("es-AR")}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}

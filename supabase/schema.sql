@@ -54,14 +54,24 @@ create table public.menu_items (
   id uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null references public.restaurant_profiles(id) on delete cascade,
   category_id uuid references public.menu_categories(id) on delete set null,
+  categoria_global_id uuid references public.categorias_globales_menu(id) on delete set null,
   name text not null,
   description text,
   image_url text,
   price integer not null check (price >= 0),
+  discount_price integer check (discount_price is null or discount_price >= 0),
+  promo_label text,
   is_available boolean not null default true,
   is_featured boolean not null default false,
   created_at timestamptz not null default now(),
   unique (restaurant_id, name)
+);
+
+create table public.restaurant_global_categories (
+  restaurant_id uuid not null references public.restaurant_profiles(id) on delete cascade,
+  categoria_global_id uuid not null references public.categorias_globales_menu(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (restaurant_id, categoria_global_id)
 );
 
 create table public.horarios_restaurantes (
@@ -122,6 +132,7 @@ create table public.order_items (
 alter table public.cities enable row level security;
 alter table public.restaurant_profiles enable row level security;
 alter table public.categorias_globales_menu enable row level security;
+alter table public.restaurant_global_categories enable row level security;
 alter table public.menu_categories enable row level security;
 alter table public.menu_items enable row level security;
 alter table public.horarios_restaurantes enable row level security;
@@ -139,6 +150,27 @@ using (true);
 create policy "Anyone can read active global categories"
 on public.categorias_globales_menu for select
 using (is_active = true);
+
+create policy "Anyone can read restaurant global categories"
+on public.restaurant_global_categories for select
+using (true);
+
+create policy "Owners can manage restaurant global categories"
+on public.restaurant_global_categories for all
+using (
+  exists (
+    select 1 from public.restaurant_profiles restaurants
+    where restaurants.id = restaurant_id
+    and restaurants.owner_user_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1 from public.restaurant_profiles restaurants
+    where restaurants.id = restaurant_id
+    and restaurants.owner_user_id = auth.uid()
+  )
+);
 
 create policy "Owners can manage their restaurant"
 on public.restaurant_profiles for all

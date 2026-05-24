@@ -43,20 +43,45 @@ type MenuItemRow = {
   name: string;
   description: string | null;
   price: number;
+  discount_price?: number | null;
+  promo_label?: string | null;
   image_url: string | null;
   is_available: boolean;
   is_featured?: boolean;
-  menu_categories: MenuCategoryRow | MenuCategoryRow[] | null;
+  categoria_global_id?: string | null;
+  menu_categories?: MenuCategoryRow | MenuCategoryRow[] | null;
   restaurant_profiles?:
     | {
+        id?: string | null;
         name: string | null;
         slug: string | null;
+        category?: string | null;
+        phone?: string | null;
+        whatsapp?: string | null;
+        manual_is_open?: boolean | null;
+        estimated_time?: string | null;
+        image_url?: string | null;
         logo_url: string | null;
+        rating?: number | null;
+        tags?: string[] | null;
+        delivery_enabled?: boolean | null;
+        cities?: CityRow | CityRow[] | null;
       }
     | {
+        id?: string | null;
         name: string | null;
         slug: string | null;
+        category?: string | null;
+        phone?: string | null;
+        whatsapp?: string | null;
+        manual_is_open?: boolean | null;
+        estimated_time?: string | null;
+        image_url?: string | null;
         logo_url: string | null;
+        rating?: number | null;
+        tags?: string[] | null;
+        delivery_enabled?: boolean | null;
+        cities?: CityRow | CityRow[] | null;
       }[]
     | null;
 };
@@ -109,6 +134,8 @@ export type MenuItem = {
   name: string;
   description: string;
   price: number;
+  discountPrice?: number | null;
+  promoLabel?: string | null;
   image: string;
   categoryName: string;
   categoryOrder: number;
@@ -119,6 +146,22 @@ export type MenuItem = {
 
 export type RestaurantWithMenu = RestaurantSummary & {
   menu: MenuItem[];
+};
+
+export type CategoryProduct = MenuItem & {
+  restaurant: {
+    id: string;
+    name: string;
+    slug: string;
+    phone: string | null;
+    logoUrl: string | null;
+    scheduleStatus: "open" | "closed" | "unknown";
+    scheduleLabel: string;
+  };
+};
+
+export type GlobalCategoryWithProducts = GlobalCategory & {
+  products: CategoryProduct[];
 };
 
 const dayLabels = [
@@ -173,6 +216,23 @@ function getStringValue(row: Record<string, unknown>, keys: string[]) {
 
   return null;
 }
+
+function getIdentifierValue(row: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+
+  return null;
+}
+
 
 function getNumberValue(row: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
@@ -406,12 +466,127 @@ function mapMenuItem(row: MenuItemRow): MenuItem {
     name: row.name,
     description: row.description ?? "Producto disponible en el restaurante.",
     price: row.price,
+    discountPrice: row.discount_price ?? null,
+    promoLabel: row.promo_label ?? null,
     image: row.image_url ?? DEFAULT_MENU_ITEM_IMAGE,
     categoryName: category?.name ?? "Menu",
     categoryOrder: category?.sort_order ?? 999,
     restaurantName: restaurant?.name ?? undefined,
     restaurantLogoUrl: restaurant?.logo_url ?? null,
     restaurantSlug: restaurant?.slug ?? undefined
+  };
+}
+
+function mapGlobalCategoryMenuItem(row: MenuItemRow, category: GlobalCategory): MenuItem {
+  const restaurant = getMenuItemRestaurant(row);
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? "Producto disponible en el restaurante.",
+    price: row.price,
+    discountPrice: row.discount_price ?? null,
+    promoLabel: row.promo_label ?? null,
+    image: row.image_url ?? DEFAULT_MENU_ITEM_IMAGE,
+    categoryName: category.name,
+    categoryOrder: 0,
+    restaurantName: restaurant?.name ?? undefined,
+    restaurantLogoUrl: restaurant?.logo_url ?? null,
+    restaurantSlug: restaurant?.slug ?? undefined
+  };
+}
+
+function inferGlobalCategoryIcon(name: string, explicitIcon: string | null) {
+  const normalizedName = normalizeComparableText(name);
+  const normalizedIcon = explicitIcon ? normalizeComparableText(explicitIcon) : null;
+
+  if (normalizedIcon && normalizedIcon !== "utensils") {
+    return normalizedIcon;
+  }
+
+  if (normalizedName.includes("pizza")) {
+    return "pizza";
+  }
+
+  if (normalizedName.includes("hamburg")) {
+    return "burger";
+  }
+
+  if (normalizedName.includes("empanada")) {
+    return "empanada";
+  }
+
+  if (normalizedName.includes("pasta") || normalizedName.includes("fideo")) {
+    return "pasta";
+  }
+
+  if (normalizedName.includes("bebida") || normalizedName.includes("gaseosa")) {
+    return "drink";
+  }
+
+  if (normalizedName.includes("postre") || normalizedName.includes("helado")) {
+    return "dessert";
+  }
+
+  if (normalizedName.includes("sushi")) {
+    return "sushi";
+  }
+
+  if (
+    normalizedName.includes("carne") ||
+    normalizedName.includes("asado") ||
+    normalizedName.includes("parrilla")
+  ) {
+    return "carne";
+  }
+
+  if (
+    normalizedName.includes("sandwich") ||
+    normalizedName.includes("sanguche") ||
+    normalizedName.includes("lomito")
+  ) {
+    return "sandwich";
+  }
+
+  if (
+    normalizedName.includes("panaderia") ||
+    normalizedName.includes("panader") ||
+    normalizedName.includes("factura")
+  ) {
+    return "panaderia";
+  }
+
+  return "utensils";
+}
+
+function getMenuItemRestaurant(row: MenuItemRow) {
+  return Array.isArray(row.restaurant_profiles)
+    ? row.restaurant_profiles[0]
+    : row.restaurant_profiles;
+}
+
+function normalizeRestaurantFromMenuItem(row: MenuItemRow): RestaurantRow | null {
+  const restaurant = getMenuItemRestaurant(row);
+
+  if (!restaurant?.id || !restaurant.name || !restaurant.slug) {
+    return null;
+  }
+
+  return {
+    id: restaurant.id,
+    name: restaurant.name,
+    slug: restaurant.slug,
+    category: restaurant.category ?? null,
+    phone: restaurant.phone ?? null,
+    whatsapp: restaurant.whatsapp ?? null,
+    manual_is_open: restaurant.manual_is_open ?? null,
+    estimated_time: restaurant.estimated_time ?? null,
+    image_url: restaurant.image_url ?? null,
+    logo_url: restaurant.logo_url ?? null,
+    rating: restaurant.rating ?? null,
+    tags: restaurant.tags ?? null,
+    delivery_enabled: restaurant.delivery_enabled ?? true,
+    cities: restaurant.cities ?? null
   };
 }
 
@@ -604,25 +779,34 @@ export async function getRestaurantWithMenu(slug: string) {
     await getHoursByRestaurant(restaurantRow)
   );
 
-  const { data: menuData, error: menuError } = await supabase
-    .from("menu_items")
-    .select(
-      `
-        id,
-        name,
-        description,
-        price,
-        image_url,
-        is_available,
-        menu_categories (
+  const loadMenu = (includePromoFields: boolean) =>
+    supabase
+      .from("menu_items")
+      .select(
+        `
+          id,
           name,
-          sort_order
-        )
-      `
-    )
-    .eq("restaurant_id", restaurant.id)
-    .eq("is_available", true)
-    .order("created_at", { ascending: true });
+          description,
+          price,
+          ${includePromoFields ? "discount_price, promo_label," : ""}
+          image_url,
+          is_available,
+          menu_categories (
+            name,
+            sort_order
+          )
+        `
+      )
+      .eq("restaurant_id", restaurant.id)
+      .eq("is_available", true)
+      .order("created_at", { ascending: true });
+  let { data: menuData, error: menuError } = await loadMenu(true);
+
+  if (menuError?.code === "42703") {
+    const retry = await loadMenu(false);
+    menuData = retry.data;
+    menuError = retry.error;
+  }
 
   if (menuError) {
     throw new Error(`No se pudo cargar el menu: ${menuError.message}`);
@@ -671,10 +855,13 @@ export async function getGlobalCategories() {
     .map((category, index) => {
       const name =
         getStringValue(category, [
+          "Nombre",
           "name",
           "nombre",
+          "Categoria",
           "categoria",
           "nombre_categoria",
+          "NombreCategoria",
           "titulo",
           "label"
         ]) ??
@@ -689,12 +876,20 @@ export async function getGlobalCategories() {
           .replace(/(^-|-$)/g, "");
 
       return {
-        id: getStringValue(category, ["id"]) ?? slug,
+        id: getIdentifierValue(category, ["id"]) ?? slug,
         name,
         slug,
         iconName:
-          getStringValue(category, ["icon_name", "icono", "icon", "icon_name_menu"]) ??
-          "utensils",
+          inferGlobalCategoryIcon(
+            name,
+            getStringValue(category, [
+              "icon_name",
+              "Icono",
+              "icono",
+              "icon",
+              "icon_name_menu"
+            ])
+          ),
         sortOrder:
           getNumberValue(category, ["sort_order", "orden", "order", "position"]) ??
           index
@@ -709,37 +904,167 @@ export async function getGlobalCategories() {
     }));
 }
 
+export async function getProductsByGlobalCategory(
+  categorySlug: string,
+  citySlug = DEFAULT_CITY_SLUG
+): Promise<GlobalCategoryWithProducts | null> {
+  const categories = await getGlobalCategories();
+  const category = categories.find(
+    (current) => current.slug === categorySlug || current.id === categorySlug
+  );
+
+  if (!category) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const loadProducts = (includePromoFields: boolean) =>
+    supabase
+      .from("menu_items")
+      .select(
+        `
+          id,
+          name,
+          description,
+          price,
+          ${includePromoFields ? "discount_price, promo_label," : ""}
+          image_url,
+          is_available,
+          categoria_global_id,
+          restaurant_profiles!inner (
+            id,
+            name,
+            slug,
+            category,
+            phone,
+            whatsapp,
+            manual_is_open,
+            estimated_time,
+            image_url,
+            logo_url,
+            rating,
+            tags,
+            delivery_enabled,
+            cities!inner (
+              name,
+              province,
+              slug
+            )
+          )
+        `
+      )
+      .eq("is_available", true)
+      .eq("categoria_global_id", category.id)
+      .eq("restaurant_profiles.cities.slug", citySlug)
+      .order("created_at", { ascending: false });
+  let { data, error } = await loadProducts(true);
+
+  if (error?.code === "42703") {
+    const retry = await loadProducts(false);
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error) {
+    return {
+      ...category,
+      products: []
+    };
+  }
+
+  const rows = (data ?? []) as unknown as MenuItemRow[];
+  const restaurantRowsById = new Map<string, RestaurantRow>();
+
+  rows.forEach((row) => {
+    const restaurant = normalizeRestaurantFromMenuItem(row);
+
+    if (restaurant) {
+      restaurantRowsById.set(restaurant.id, restaurant);
+    }
+  });
+
+  const hoursByRestaurant = await getHoursByRestaurants([
+    ...restaurantRowsById.values()
+  ]);
+
+  const products = rows.flatMap((row) => {
+    const restaurantRow = normalizeRestaurantFromMenuItem(row);
+
+    if (!restaurantRow) {
+      return [];
+    }
+
+    const restaurant = mapRestaurant(
+      restaurantRow,
+      hoursByRestaurant.get(restaurantRow.id) ?? []
+    );
+    const item = mapGlobalCategoryMenuItem(row, category);
+
+    return [
+      {
+        ...item,
+        restaurantName: restaurant.name,
+        restaurantLogoUrl: restaurant.logoUrl,
+        restaurantSlug: restaurant.slug,
+        restaurant: {
+          id: restaurant.id,
+          name: restaurant.name,
+          slug: restaurant.slug,
+          phone: restaurant.phone,
+          logoUrl: restaurant.logoUrl,
+          scheduleStatus: restaurant.scheduleStatus,
+          scheduleLabel: restaurant.scheduleLabel
+        }
+      }
+    ];
+  });
+
+  return {
+    ...category,
+    products
+  };
+}
+
 export async function getFeaturedMenuItems(citySlug = DEFAULT_CITY_SLUG) {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("menu_items")
-    .select(
-      `
-        id,
-        name,
-        description,
-        price,
-        image_url,
-        is_available,
-        is_featured,
-        restaurant_profiles!inner (
+  const loadFeatured = (includePromoFields: boolean) =>
+    supabase
+      .from("menu_items")
+      .select(
+        `
+          id,
           name,
-          slug,
-          logo_url,
-          cities!inner (
-            slug
+          description,
+          price,
+          ${includePromoFields ? "discount_price, promo_label," : ""}
+          image_url,
+          is_available,
+          is_featured,
+          restaurant_profiles!inner (
+            name,
+            slug,
+            logo_url,
+            cities!inner (
+              slug
+            )
+          ),
+          menu_categories (
+            name,
+            sort_order
           )
-        ),
-        menu_categories (
-          name,
-          sort_order
-        )
-      `
-    )
-    .eq("is_available", true)
-    .eq("restaurant_profiles.cities.slug", citySlug)
-    .order("is_featured", { ascending: false })
-    .limit(6);
+        `
+      )
+      .eq("is_available", true)
+      .eq("restaurant_profiles.cities.slug", citySlug)
+      .order("is_featured", { ascending: false })
+      .limit(6);
+  let { data, error } = await loadFeatured(true);
+
+  if (error?.code === "42703") {
+    const retry = await loadFeatured(false);
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error || !data?.length) {
     return fallbackRestaurants
