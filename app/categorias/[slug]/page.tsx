@@ -7,6 +7,9 @@ import { CategoryIcon } from "@/components/category-icon";
 import { CategoryProductCard } from "@/components/category-product-card";
 import { getProductsByGlobalCategory } from "@/lib/restaurants";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type CategoryPageProps = {
   params: Promise<{
     slug: string;

@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { fallbackRestaurants } from "@/lib/fallback-catalog";
 
@@ -821,6 +822,8 @@ export async function getRestaurantWithMenu(slug: string) {
 }
 
 export async function getGlobalCategories() {
+  noStore();
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("categorias_globales_menu")

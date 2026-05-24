@@ -18,6 +18,9 @@ import {
   getGlobalCategories
 } from "@/lib/restaurants";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function HomePage() {
   const [restaurants, categories, featuredItems] = await Promise.all([
     getFeaturedRestaurants(),
