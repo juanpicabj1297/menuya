@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createPublicClient } from "@/lib/supabase/public";
 import { fallbackRestaurants } from "@/lib/fallback-catalog";
+import { getDiscountPercent } from "@/lib/promotions";
 
 const DEFAULT_CITY_SLUG = "suipacha";
 const DEFAULT_RESTAURANT_IMAGE =
@@ -144,6 +145,8 @@ export type MenuItem = {
   restaurantName?: string;
   restaurantLogoUrl?: string | null;
   restaurantSlug?: string;
+  restaurantId?: string;
+  restaurantPhone?: string | null;
 };
 
 export type RestaurantWithMenu = RestaurantSummary & {
@@ -480,7 +483,9 @@ function mapMenuItem(row: MenuItemRow): MenuItem {
     categoryOrder: category?.sort_order ?? 999,
     restaurantName: restaurant?.name ?? undefined,
     restaurantLogoUrl: restaurant?.logo_url ?? null,
-    restaurantSlug: restaurant?.slug ?? undefined
+    restaurantSlug: restaurant?.slug ?? undefined,
+    restaurantId: restaurant?.id ?? undefined,
+    restaurantPhone: restaurant?.whatsapp ?? restaurant?.phone ?? null
   };
 }
 
@@ -499,7 +504,9 @@ function mapGlobalCategoryMenuItem(row: MenuItemRow, category: GlobalCategory): 
     categoryOrder: 0,
     restaurantName: restaurant?.name ?? undefined,
     restaurantLogoUrl: restaurant?.logo_url ?? null,
-    restaurantSlug: restaurant?.slug ?? undefined
+    restaurantSlug: restaurant?.slug ?? undefined,
+    restaurantId: restaurant?.id ?? undefined,
+    restaurantPhone: restaurant?.whatsapp ?? restaurant?.phone ?? null
   };
 }
 
@@ -861,6 +868,7 @@ export async function getGlobalCategories() {
   const { data, error } = await supabase
     .from("categorias_globales_menu")
     .select("*");
+    .order("sort_order", { ascending: true })
 
   if (error) {
     console.error("[MenuYa] categorias_globales_menu fetch error", {
@@ -1072,7 +1080,7 @@ export async function getProductsByGlobalCategory(
   };
 }
 
-export async function getFeaturedMenuItems(citySlug = DEFAULT_CITY_SLUG) {
+export async function getFeaturedMenuItems(citySlug = DEFAULT_CITY_SLUG, limit = 8) {
   const supabase = await createClient();
   const loadFeatured = (includePromoFields: boolean) =>
     supabase
@@ -1088,8 +1096,11 @@ export async function getFeaturedMenuItems(citySlug = DEFAULT_CITY_SLUG) {
           is_available,
           is_featured,
           restaurant_profiles!inner (
+            id,
             name,
             slug,
+            phone,
+            whatsapp,
             logo_url,
             cities!inner (
               slug
@@ -1104,7 +1115,8 @@ export async function getFeaturedMenuItems(citySlug = DEFAULT_CITY_SLUG) {
       .eq("is_available", true)
       .eq("restaurant_profiles.cities.slug", citySlug)
       .order("is_featured", { ascending: false })
-      .limit(6);
+      .order("created_at", { ascending: false })
+      .limit(limit);
   let { data, error } = await loadFeatured(true);
 
   if (error?.code === "42703") {
@@ -1118,13 +1130,115 @@ export async function getFeaturedMenuItems(citySlug = DEFAULT_CITY_SLUG) {
       .flatMap((restaurant) =>
         restaurant.menu.map((item) => ({
           ...item,
+          restaurantId: restaurant.id,
           restaurantName: restaurant.name,
           restaurantLogoUrl: restaurant.logoUrl,
-          restaurantSlug: restaurant.slug
+          restaurantSlug: restaurant.slug,
+          restaurantPhone: restaurant.phone
         }))
       )
-      .slice(0, 6);
+      .slice(0, limit);
   }
 
-  return (data as unknown as MenuItemRow[]).map(mapMenuItem).slice(0, 6);
+  return (data as unknown as MenuItemRow[]).map(mapMenuItem).slice(0, limit);
+}
+
+async function getMenuItemsByIds(ids: string[], citySlug = DEFAULT_CITY_SLUG) {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const loadItems = (includePromoFields: boolean) =>
+    supabase
+      .from("menu_items")
+      .select(
+        `
+          id,
+          name,
+          description,
+          price,
+          ${includePromoFields ? "discount_price, promo_label," : ""}
+          image_url,
+          is_available,
+          restaurant_profiles!inner (
+            id,
+            name,
+            slug,
+            phone,
+            whatsapp,
+            logo_url,
+            cities!inner (
+              slug
+            )
+          ),
+          menu_categories (
+            name,
+            sort_order
+          )
+        `
+      )
+      .in("id", ids)
+      .eq("is_available", true)
+      .eq("restaurant_profiles.cities.slug", citySlug);
+  let { data, error } = await loadItems(true);
+
+  if (error?.code === "42703") {
+    const retry = await loadItems(false);
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data?.length) {
+    return [];
+  }
+
+  const itemsById = new Map(
+    (data as unknown as MenuItemRow[]).map((row) => [row.id, mapMenuItem(row)])
+  );
+
+  return ids.flatMap((id) => {
+    const item = itemsById.get(id);
+    return item ? [item] : [];
+  });
+}
+
+export async function getMostOrderedMenuItems(citySlug = DEFAULT_CITY_SLUG, limit = 8) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_most_ordered_menu_item_ids", {
+    result_limit: limit,
+    city_slug: citySlug
+  });
+  const orderedIds =
+    error || !data
+      ? []
+      : (data as { menu_item_id: string | null; total_quantity: number }[])
+          .map((row) => row.menu_item_id)
+          .filter((id): id is string => Boolean(id));
+  const realOrderedItems = await getMenuItemsByIds(orderedIds, citySlug);
+  const seenIds = new Set(realOrderedItems.map((item) => item.id));
+
+  if (realOrderedItems.length >= limit) {
+    return realOrderedItems.slice(0, limit);
+  }
+
+  const fallbackItems = (await getFeaturedMenuItems(citySlug, limit * 2)).filter(
+    (item) => !seenIds.has(item.id)
+  );
+
+  return [...realOrderedItems, ...fallbackItems].slice(0, limit);
+}
+
+export async function getPromotionalMenuItems(citySlug = DEFAULT_CITY_SLUG, limit = 24) {
+  const items = await getFeaturedMenuItems(citySlug, 80);
+
+  return items
+    .map((item) => ({
+      item,
+      discountPercent: getDiscountPercent(item.price, item.discountPrice) ?? 0
+    }))
+    .filter(({ discountPercent }) => discountPercent > 0)
+    .sort((a, b) => b.discountPercent - a.discountPercent)
+    .slice(0, limit)
+    .map(({ item }) => item);
 }

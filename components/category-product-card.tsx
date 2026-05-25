@@ -3,9 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCart } from "@/components/cart-provider";
+import { DiscountBadge } from "@/components/discount-badge";
 import { QuantityControl } from "@/components/quantity-control";
 import { RestaurantLogoOverlay } from "@/components/restaurant-logo-overlay";
 import type { CategoryProduct } from "@/lib/restaurants";
+import { getDiscountPercent, getEffectivePrice } from "@/lib/promotions";
 
 type CategoryProductCardProps = {
   product: CategoryProduct;
@@ -14,7 +16,8 @@ type CategoryProductCardProps = {
 export function CategoryProductCard({ product }: CategoryProductCardProps) {
   const { getQuantity, increment, decrement } = useCart();
   const quantity = getQuantity(product.id);
-  const effectivePrice = product.discountPrice ?? product.price;
+  const discountPercent = getDiscountPercent(product.price, product.discountPrice);
+  const effectivePrice = getEffectivePrice(product.price, product.discountPrice);
   const isOpen = product.restaurant.scheduleStatus === "open";
 
   return (
@@ -34,6 +37,11 @@ export function CategoryProductCard({ product }: CategoryProductCardProps) {
         >
           {isOpen ? "Abierto ahora" : "Cerrado"}
         </span>
+        {discountPercent && (
+          <span className="absolute right-3 top-3">
+            <DiscountBadge percent={discountPercent} />
+          </span>
+        )}
         <div className="absolute bottom-3 left-3">
           <RestaurantLogoOverlay
             logoUrl={product.restaurant.logoUrl}
@@ -71,10 +79,13 @@ export function CategoryProductCard({ product }: CategoryProductCardProps) {
             <p className="text-lg font-black text-ink-950">
               ${effectivePrice.toLocaleString("es-AR")}
             </p>
-            {product.discountPrice && (
-              <p className="text-xs font-bold text-neutral-400 line-through">
-                ${product.price.toLocaleString("es-AR")}
-              </p>
+            {discountPercent && (
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-xs font-bold text-neutral-400 line-through">
+                  ${product.price.toLocaleString("es-AR")}
+                </p>
+                <DiscountBadge percent={discountPercent} compact />
+              </div>
             )}
           </div>
 
@@ -86,6 +97,8 @@ export function CategoryProductCard({ product }: CategoryProductCardProps) {
                 id: product.id,
                 name: product.name,
                 price: effectivePrice,
+                originalPrice: discountPercent ? product.price : null,
+                discountPercent,
                 image: product.image,
                 restaurantId: product.restaurant.id,
                 restaurantName: product.restaurant.name,

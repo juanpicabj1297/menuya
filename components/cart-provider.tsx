@@ -13,6 +13,8 @@ export type CartProduct = {
   id: string;
   name: string;
   price: number;
+  originalPrice?: number | null;
+  discountPercent?: number | null;
   image: string;
   restaurantId: string;
   restaurantName: string;

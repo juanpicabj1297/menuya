@@ -13,6 +13,7 @@ import {
   Trash2
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { DiscountBadge } from "@/components/discount-badge";
 import { useCart } from "@/components/cart-provider";
 import { QuantityControl } from "@/components/quantity-control";
 
@@ -272,6 +273,14 @@ export default function CartPage() {
                         <p className="mt-1 text-sm text-slate-500">
                           {formatPrice(item.price)} c/u
                         </p>
+                        {item.discountPercent && item.originalPrice && (
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-400 line-through">
+                              {formatPrice(item.originalPrice)}
+                            </span>
+                            <DiscountBadge percent={item.discountPercent} compact />
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"

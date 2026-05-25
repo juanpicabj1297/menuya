@@ -5,15 +5,18 @@ import { ArrowLeft, CalendarDays, Clock3, Star } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CartLink } from "@/components/cart-link";
 import { MenuItemCard } from "@/components/menu-item-card";
+import { ProductFocusScroll } from "@/components/product-focus-scroll";
 import { RestaurantLogo } from "@/components/restaurant-logo";
 import { getRestaurantWithMenu } from "@/lib/restaurants";
 
 type Props = {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ producto?: string }>;
 };
 
-export default async function RestaurantMenuPage({ params }: Props) {
+export default async function RestaurantMenuPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const highlightedProductId = (await searchParams)?.producto ?? null;
   const restaurant = await getRestaurantWithMenu(slug);
 
   if (!restaurant) {
@@ -66,6 +69,7 @@ export default async function RestaurantMenuPage({ params }: Props) {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-28 pt-4 sm:px-6">
+      <ProductFocusScroll productId={highlightedProductId} />
       <nav className="sticky top-3 z-20 mb-5 flex items-center justify-between rounded-2xl border border-white/70 bg-white/90 px-3 py-3 shadow-card backdrop-blur">
         <BrandLogo compact />
         <Link
@@ -203,6 +207,7 @@ export default async function RestaurantMenuPage({ params }: Props) {
                   <MenuItemCard
                     key={item.id}
                     item={item}
+                    highlighted={item.id === highlightedProductId}
                     restaurant={{
                       id: restaurant.id,
                       name: restaurant.name,

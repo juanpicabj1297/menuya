@@ -126,7 +126,8 @@ create table public.order_items (
   item_name text not null,
   unit_price integer not null check (unit_price >= 0),
   quantity integer not null check (quantity > 0),
-  notes text
+  notes text,
+  created_at timestamptz not null default now()
 );
 
 alter table public.cities enable row level security;

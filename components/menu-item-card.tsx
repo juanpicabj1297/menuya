@@ -2,11 +2,14 @@
 
 import Image from "next/image";
 import { useCart } from "@/components/cart-provider";
+import { DiscountBadge } from "@/components/discount-badge";
 import { QuantityControl } from "@/components/quantity-control";
 import type { MenuItem } from "@/lib/restaurants";
+import { getDiscountPercent, getEffectivePrice } from "@/lib/promotions";
 
 type MenuItemCardProps = {
   item: MenuItem;
+  highlighted?: boolean;
   restaurant: {
     id: string;
     name: string;
@@ -15,15 +18,21 @@ type MenuItemCardProps = {
   };
 };
 
-export function MenuItemCard({ item, restaurant }: MenuItemCardProps) {
+export function MenuItemCard({ item, highlighted = false, restaurant }: MenuItemCardProps) {
   const { getQuantity, increment, decrement } = useCart();
   const quantity = getQuantity(item.id);
-  const effectivePrice = item.discountPrice ?? item.price;
+  const discountPercent = getDiscountPercent(item.price, item.discountPrice);
+  const effectivePrice = getEffectivePrice(item.price, item.discountPrice);
 
   return (
     <article
+      id={`producto-${item.id}`}
       className={`hover-lift flex items-center gap-4 rounded-2xl border bg-white p-3 shadow-card transition ${
-        quantity > 0 ? "border-brand-100" : "border-white"
+        highlighted
+          ? "border-brand-500 ring-4 ring-brand-50"
+          : quantity > 0
+            ? "border-brand-100"
+            : "border-white"
       }`}
     >
       <Image
@@ -50,10 +59,13 @@ export function MenuItemCard({ item, restaurant }: MenuItemCardProps) {
             <p className="font-semibold text-slate-900">
               ${effectivePrice.toLocaleString("es-AR")}
             </p>
-            {item.discountPrice && (
-              <p className="text-xs font-bold text-neutral-400 line-through">
-                ${item.price.toLocaleString("es-AR")}
-              </p>
+            {discountPercent && (
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-xs font-bold text-neutral-400 line-through">
+                  ${item.price.toLocaleString("es-AR")}
+                </p>
+                <DiscountBadge percent={discountPercent} compact />
+              </div>
             )}
           </div>
           <QuantityControl
@@ -64,6 +76,8 @@ export function MenuItemCard({ item, restaurant }: MenuItemCardProps) {
                 id: item.id,
                 name: item.name,
                 price: effectivePrice,
+                originalPrice: discountPercent ? item.price : null,
+                discountPercent,
                 image: item.image,
                 restaurantId: restaurant.id,
                 restaurantName: restaurant.name,

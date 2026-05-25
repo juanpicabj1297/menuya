@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowRight,
   HeartHandshake,
@@ -8,25 +7,27 @@ import {
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CartLink } from "@/components/cart-link";
-import { CategoryIcon } from "@/components/category-icon";
+import { FeaturedProductCard } from "@/components/featured-product-card";
+import { GlobalCategoryCarousel } from "@/components/global-category-carousel";
 import { HeroCarousel } from "@/components/hero-carousel";
-import { RestaurantLogoOverlay } from "@/components/restaurant-logo-overlay";
 import { RestaurantLogo } from "@/components/restaurant-logo";
 import {
   getCurrentRestaurantSession,
-  getFeaturedMenuItems,
   getFeaturedRestaurants,
-  getGlobalCategories
+  getGlobalCategories,
+  getMostOrderedMenuItems,
+  getPromotionalMenuItems
 } from "@/lib/restaurants";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [restaurants, categories, featuredItems, restaurantSession] = await Promise.all([
+  const [restaurants, categories, featuredItems, promoItems, restaurantSession] = await Promise.all([
     getFeaturedRestaurants(),
     getGlobalCategories(),
-    getFeaturedMenuItems(),
+    getMostOrderedMenuItems(),
+    getPromotionalMenuItems("suipacha", 6),
     getCurrentRestaurantSession()
   ]);
   const restaurantButtonHref = restaurantSession
@@ -104,28 +105,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-5 sm:px-0">
-            {categories.length === 0 && (
-              <div className="min-w-full rounded-[1.4rem] border border-dashed border-neutral-200 bg-neutral-50 p-5 text-sm font-semibold text-neutral-500 sm:col-span-5">
-                Las categorias globales se van a mostrar aca cuando esten
-                cargadas en Supabase.
-              </div>
-            )}
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                href={`/categorias/${category.slug}`}
-                className="min-w-28 rounded-[1.4rem] border border-neutral-200 bg-white p-4 text-center shadow-card transition hover:-translate-y-0.5 hover:border-brand-500"
-              >
-                <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-neutral-100 text-ink-950">
-                  <CategoryIcon iconName={category.iconName} />
-                </span>
-                <span className="mt-3 block text-sm font-black text-ink-950">
-                  {category.name}
-                </span>
-              </Link>
-            ))}
-          </div>
+          <GlobalCategoryCarousel categories={categories} />
         </section>
 
         <section className="mt-10">
@@ -191,52 +171,47 @@ export default async function HomePage() {
                 Fotos grandes para elegir rapido.
               </p>
             </div>
+            <Link
+              href="/mas-pedido"
+              className="rounded-full bg-neutral-100 px-4 py-2 text-sm font-black text-ink-950 transition hover:bg-brand-500"
+            >
+              Ver mas
+            </Link>
           </div>
 
-          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0">
-            {featuredItems.slice(0, 3).map((item) => (
-              <div
-                key={item.id}
-                className="min-w-64 overflow-hidden rounded-[1.6rem] border border-neutral-200 bg-white shadow-card"
-              >
-                <div className="relative h-40">
-                  <Image
-                    src={item.image}
-                    alt={item.name}
-                    fill
-                    sizes="(min-width: 640px) 33vw, 260px"
-                    className="object-cover"
-                  />
-                  <div className="absolute bottom-3 left-3">
-                    <RestaurantLogoOverlay
-                      logoUrl={item.restaurantLogoUrl}
-                      restaurantName={item.restaurantName}
-                    />
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-black text-ink-950">{item.name}</h3>
-                  {item.restaurantName && (
-                    <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-neutral-400">
-                      {item.restaurantName}
-                    </p>
-                  )}
-                  <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
-                    {item.description}
-                  </p>
-                  <p className="mt-3 font-black text-ink-950">
-                    ${(item.discountPrice ?? item.price).toLocaleString("es-AR")}
-                  </p>
-                  {item.discountPrice && (
-                    <p className="text-xs font-bold text-neutral-400 line-through">
-                      ${item.price.toLocaleString("es-AR")}
-                    </p>
-                  )}
-                </div>
-              </div>
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto scroll-smooth px-4 pb-2 sm:mx-0 sm:px-0">
+            {featuredItems.slice(0, 4).map((item) => (
+              <FeaturedProductCard key={item.id} item={item} />
             ))}
           </div>
         </section>
+
+        {promoItems.length > 0 && (
+          <section className="mt-10">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black tracking-tight text-ink-950">
+                  Promos
+                </h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Descuentos reales de comercios locales.
+                </p>
+              </div>
+              <Link
+                href="/promos"
+                className="rounded-full bg-neutral-100 px-4 py-2 text-sm font-black text-ink-950 transition hover:bg-brand-500"
+              >
+                Ver mas
+              </Link>
+            </div>
+
+            <div className="-mx-4 flex snap-x gap-3 overflow-x-auto scroll-smooth px-4 pb-2 sm:mx-0 sm:px-0">
+              {promoItems.slice(0, 4).map((item) => (
+                <FeaturedProductCard key={item.id} item={item} />
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="my-10 rounded-[1.8rem] border border-neutral-200 bg-neutral-50 p-5">
           <div className="flex items-center gap-4">
