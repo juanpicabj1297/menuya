@@ -13,6 +13,7 @@ import { HeroCarousel } from "@/components/hero-carousel";
 import { RestaurantLogoOverlay } from "@/components/restaurant-logo-overlay";
 import { RestaurantLogo } from "@/components/restaurant-logo";
 import {
+  getCurrentRestaurantSession,
   getFeaturedMenuItems,
   getFeaturedRestaurants,
   getGlobalCategories
@@ -22,11 +23,19 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [restaurants, categories, featuredItems] = await Promise.all([
+  const [restaurants, categories, featuredItems, restaurantSession] = await Promise.all([
     getFeaturedRestaurants(),
     getGlobalCategories(),
-    getFeaturedMenuItems()
+    getFeaturedMenuItems(),
+    getCurrentRestaurantSession()
   ]);
+  const restaurantButtonHref = restaurantSession
+    ? "/restaurante/panel"
+    : "/restaurante/login";
+  const restaurantDesktopLabel = restaurantSession
+    ? `Perfil de ${restaurantSession.name}`
+    : "Soy restaurante";
+  const restaurantMobileLabel = restaurantSession ? "Mi panel" : "Soy restaurante";
 
   return (
     <main className="min-h-screen bg-white text-ink-950">
@@ -35,10 +44,11 @@ export default async function HomePage() {
           <BrandLogo />
           <div className="flex items-center gap-2">
             <Link
-              href="/restaurante/login"
-              className="hidden rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm font-bold text-ink-950 transition hover:border-brand-500 sm:inline-flex"
+              href={restaurantButtonHref}
+              className="inline-flex max-w-[9rem] items-center justify-center rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm font-bold text-ink-950 transition hover:border-brand-500 sm:max-w-none sm:px-4"
             >
-              Soy restaurante
+              <span className="truncate sm:hidden">{restaurantMobileLabel}</span>
+              <span className="hidden truncate sm:inline">{restaurantDesktopLabel}</span>
             </Link>
             <CartLink label="" />
           </div>

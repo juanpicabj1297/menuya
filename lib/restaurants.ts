@@ -1,5 +1,6 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { fallbackRestaurants } from "@/lib/fallback-catalog";
 
 const DEFAULT_CITY_SLUG = "suipacha";
@@ -147,6 +148,11 @@ export type MenuItem = {
 
 export type RestaurantWithMenu = RestaurantSummary & {
   menu: MenuItem[];
+};
+
+export type CurrentRestaurantSession = {
+  id: string;
+  name: string;
 };
 
 export type CategoryProduct = MenuItem & {
@@ -616,7 +622,7 @@ async function getHoursByRestaurants(restaurants: RestaurantRow[]) {
     return new Map<string, RestaurantHour[]>();
   }
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("horarios_restaurantes")
     .select("*");
@@ -666,8 +672,35 @@ async function getHoursByRestaurant(restaurant: RestaurantRow) {
   return hours.get(restaurant.id) ?? [];
 }
 
-export async function getRestaurantsByCity(citySlug = DEFAULT_CITY_SLUG) {
+export async function getCurrentRestaurantSession(): Promise<CurrentRestaurantSession | null> {
   const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("restaurant_profiles")
+    .select("id, name")
+    .eq("owner_user_id", user.id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    id: String(data.id),
+    name: String(data.name)
+  };
+}
+
+export async function getRestaurantsByCity(citySlug = DEFAULT_CITY_SLUG) {
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("restaurant_profiles")
     .select(
@@ -824,18 +857,29 @@ export async function getRestaurantWithMenu(slug: string) {
 export async function getGlobalCategories() {
   noStore();
 
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("categorias_globales_menu")
     .select("*");
 
   if (error) {
+    console.error("[MenuYa] categorias_globales_menu fetch error", {
+      code: error.code,
+      message: error.message
+    });
     return [];
   }
 
   if (!data?.length) {
+    console.info("[MenuYa] categorias_globales_menu fetch result", {
+      count: 0
+    });
     return [];
   }
+
+  console.info("[MenuYa] categorias_globales_menu fetch result", {
+    count: data.length
+  });
 
   return (data as GlobalCategoryRow[])
     .filter((category) => {

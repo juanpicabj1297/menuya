@@ -80,7 +80,20 @@ type GlobalCategory = {
 };
 
 type RestaurantGlobalCategory = {
-  categoria_global_id: string;
+  categoria_global_id: number | string;
+};
+
+type SupabaseLikeError = {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
+type PanelDebugContext = {
+  table: string;
+  action: string;
+  payload?: unknown;
 };
 
 const tabs = [
@@ -106,6 +119,15 @@ const days = [
 
 function moneyValue(value: FormDataEntryValue | null) {
   return Math.max(0, Math.round(Number(String(value ?? "0") || "0")));
+}
+
+function isMissingColumnError(error: unknown) {
+  return (
+    Boolean(error) &&
+    typeof error === "object" &&
+    ((error as SupabaseLikeError).code === "42703" ||
+      (error as SupabaseLikeError).message?.includes("column") === true)
+  );
 }
 
 function InputLabel({ children }: { children: React.ReactNode }) {
@@ -142,8 +164,64 @@ export function RestaurantPanelClient({
   const [toast, setToast] = useState<string | null>(null);
   const [password, setPassword] = useState("");
 
-  function showError(error: unknown) {
-    setToast(error instanceof Error ? error.message : "No se pudo completar la accion.");
+  function getErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (error && typeof error === "object" && "message" in error) {
+      const supabaseError = error as SupabaseLikeError;
+      return [
+        supabaseError.message,
+        supabaseError.code ? `Codigo: ${supabaseError.code}` : null,
+        supabaseError.details,
+        supabaseError.hint ? `Hint: ${supabaseError.hint}` : null
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
+
+    return "No se pudo completar la accion.";
+  }
+
+  async function logPanelDebug(context: PanelDebugContext, error?: unknown) {
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    console.error("[MenuYa panel mutation]", {
+      ...context,
+      user: user
+        ? {
+            id: user.id,
+            email: user.email
+          }
+        : null,
+      restaurantProfile: dashboardData.profile
+        ? {
+            id: dashboardData.profile.id,
+            owner_user_id: dashboardData.profile.owner_user_id,
+            name: dashboardData.profile.name
+          }
+        : null,
+      error
+    });
+  }
+
+  async function throwPanelError(context: PanelDebugContext, error: unknown) {
+    await logPanelDebug(context, error);
+    throw error;
+  }
+
+  async function showError(error: unknown) {
+    await logPanelDebug(
+      {
+        table: "unknown",
+        action: "mutation_error"
+      },
+      error
+    );
+    setToast(getErrorMessage(error));
   }
 
   const profileQuery = useQuery({
@@ -274,7 +352,7 @@ export function RestaurantPanelClient({
       globalCategories: globalCategoriesQuery.data ?? [],
       selectedGlobalCategoryIds: new Set(
         (selectedGlobalCategoriesQuery.data ?? []).map(
-          (category) => category.categoria_global_id
+          (category) => String(category.categoria_global_id)
         )
       )
     }),
@@ -316,31 +394,58 @@ export function RestaurantPanelClient({
           ? await uploadAsset(bannerFile, "banners")
           : dashboardData.profile?.image_url;
       const name = String(formData.get("name") ?? "").trim();
+      const payload = {
+        name,
+        description: String(formData.get("description") ?? "").trim() || null,
+        phone: String(formData.get("phone") ?? "").trim() || null,
+        whatsapp: String(formData.get("whatsapp") ?? "").trim() || null,
+        category: String(formData.get("category") ?? "").trim() || null,
+        estimated_time: String(formData.get("estimated_time") ?? "").trim() || null,
+        delivery_enabled: formData.get("delivery_enabled") === "on",
+        pickup_enabled: formData.get("pickup_enabled") === "on",
+        manual_is_open:
+          formData.get("manual_is_open") === "auto"
+            ? null
+            : formData.get("manual_is_open") === "open",
+        logo_url: logoUrl,
+        image_url: bannerUrl,
+        slug:
+          dashboardData.profile?.slug ??
+          `${slugify(name || "restaurante")}-${userId.slice(0, 6)}`
+      };
 
-      const { error } = await supabase
-        .from("restaurant_profiles")
-        .update({
-          name,
-          description: String(formData.get("description") ?? "").trim() || null,
-          phone: String(formData.get("phone") ?? "").trim() || null,
-          whatsapp: String(formData.get("whatsapp") ?? "").trim() || null,
-          category: String(formData.get("category") ?? "").trim() || null,
-          estimated_time: String(formData.get("estimated_time") ?? "").trim() || null,
-          delivery_enabled: formData.get("delivery_enabled") === "on",
-          pickup_enabled: formData.get("pickup_enabled") === "on",
-          manual_is_open:
-            formData.get("manual_is_open") === "auto"
-              ? null
-              : formData.get("manual_is_open") === "open",
-          logo_url: logoUrl,
-          image_url: bannerUrl,
-          slug:
-            dashboardData.profile?.slug ??
-            `${slugify(name || "restaurante")}-${userId.slice(0, 6)}`
-        })
-        .eq("id", restaurantId);
+      const runUpdate = (currentPayload: Partial<typeof payload>) =>
+        supabase
+          .from("restaurant_profiles")
+          .update(currentPayload)
+          .eq("id", restaurantId);
+      let { error } = await runUpdate(payload);
 
-      if (error) throw error;
+      if (isMissingColumnError(error)) {
+        const fallbackPayload = {
+          name: payload.name,
+          description: payload.description,
+          phone: payload.phone,
+          category: payload.category,
+          delivery_enabled: payload.delivery_enabled,
+          logo_url: payload.logo_url,
+          image_url: payload.image_url,
+          slug: payload.slug
+        };
+        const retry = await runUpdate(fallbackPayload);
+        error = retry.error;
+      }
+
+      if (error) {
+        await throwPanelError(
+          {
+            table: "restaurant_profiles",
+            action: "update",
+            payload
+          },
+          error
+        );
+      }
     },
     onSuccess: async () => {
       setToast("Informacion guardada.");
@@ -352,15 +457,25 @@ export function RestaurantPanelClient({
   const addHour = useMutation({
     mutationFn: async (formData: FormData) => {
       if (!restaurantId) throw new Error("No hay restaurante cargado.");
-
-      const { error } = await supabase.from("horarios_restaurantes").insert({
+      const payload = {
         restaurante: restaurantId,
-        dia_semana: formData.get("dia_semana"),
-        horario_apertura: formData.get("horario_apertura"),
-        horario_cierre: formData.get("horario_cierre")
-      });
+        dia_semana: String(formData.get("dia_semana") ?? ""),
+        horario_apertura: String(formData.get("horario_apertura") ?? ""),
+        horario_cierre: String(formData.get("horario_cierre") ?? "")
+      };
 
-      if (error) throw error;
+      const { error } = await supabase.from("horarios_restaurantes").insert(payload);
+
+      if (error) {
+        await throwPanelError(
+          {
+            table: "horarios_restaurantes",
+            action: "insert",
+            payload
+          },
+          error
+        );
+      }
     },
     onSuccess: async () => {
       setToast("Horario agregado.");
@@ -372,7 +487,16 @@ export function RestaurantPanelClient({
   const deleteHour = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("horarios_restaurantes").delete().eq("id", id);
-      if (error) throw error;
+      if (error) {
+        await throwPanelError(
+          {
+            table: "horarios_restaurantes",
+            action: "delete",
+            payload: { id }
+          },
+          error
+        );
+      }
     },
     onSuccess: async () => {
       setToast("Horario eliminado.");
@@ -396,32 +520,59 @@ export function RestaurantPanelClient({
         .delete()
         .eq("restaurant_id", restaurantId);
 
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        await throwPanelError(
+          {
+            table: "restaurant_global_categories",
+            action: "delete",
+            payload: { restaurant_id: restaurantId }
+          },
+          deleteError
+        );
+      }
 
       if (selectedIds.length > 0) {
+        const payload = selectedIds.map((id) => ({
+          restaurant_id: restaurantId,
+          categoria_global_id: id
+        }));
         const { error: insertError } = await supabase
           .from("restaurant_global_categories")
-          .insert(
-            selectedIds.map((id) => ({
-              restaurant_id: restaurantId,
-              categoria_global_id: id
-            }))
-          );
+          .insert(payload);
 
-        if (insertError) throw insertError;
+        if (insertError) {
+          await throwPanelError(
+            {
+              table: "restaurant_global_categories",
+              action: "insert",
+              payload
+            },
+            insertError
+          );
+        }
       }
 
       for (const [index, category] of selectedCategories.entries()) {
+        const payload = {
+          restaurant_id: restaurantId,
+          name: category.name,
+          sort_order: index
+        };
         const { error } = await supabase.from("menu_categories").upsert(
-          {
-            restaurant_id: restaurantId,
-            name: category.name,
-            sort_order: index
-          },
+          payload,
           { onConflict: "restaurant_id,name" }
         );
 
-        if (error) throw error;
+        if (error) {
+          await throwPanelError(
+            {
+              table: "menu_categories",
+              action: "upsert",
+              payload
+            },
+            error
+          );
+        }
       }
     },
     onSuccess: async () => {
@@ -463,7 +614,7 @@ export function RestaurantPanelClient({
 
       const payload = {
         restaurant_id: restaurantId,
-        category_id: categoryId,
+        category_id: categoryId || null,
         categoria_global_id: globalCategoryId,
         name: String(formData.get("name") ?? "").trim(),
         description: String(formData.get("description") ?? "").trim() || null,
@@ -477,12 +628,30 @@ export function RestaurantPanelClient({
         is_available: formData.get("is_available") === "on",
         is_featured: formData.get("is_featured") === "on"
       };
-      const query = id
-        ? supabase.from("menu_items").update(payload).eq("id", id)
-        : supabase.from("menu_items").insert(payload);
-      const { error } = await query;
+      const runSave = (currentPayload: Partial<typeof payload>) =>
+        id
+          ? supabase.from("menu_items").update(currentPayload).eq("id", id)
+          : supabase.from("menu_items").insert(currentPayload);
+      let { error } = await runSave(payload);
 
-      if (error) throw error;
+      if (isMissingColumnError(error)) {
+        const { discount_price, promo_label, ...fallbackPayload } = payload;
+        void discount_price;
+        void promo_label;
+        const retry = await runSave(fallbackPayload);
+        error = retry.error;
+      }
+
+      if (error) {
+        await throwPanelError(
+          {
+            table: "menu_items",
+            action: id ? "update" : "insert",
+            payload
+          },
+          error
+        );
+      }
     },
     onSuccess: async () => {
       setToast("Producto guardado.");
@@ -500,7 +669,16 @@ export function RestaurantPanelClient({
       payload: Partial<MenuItem>;
     }) => {
       const { error } = await supabase.from("menu_items").update(payload).eq("id", id);
-      if (error) throw error;
+      if (error) {
+        await throwPanelError(
+          {
+            table: "menu_items",
+            action: "quick_update",
+            payload: { id, ...payload }
+          },
+          error
+        );
+      }
     },
     onSuccess: async () => {
       setToast("Producto actualizado.");
@@ -512,7 +690,16 @@ export function RestaurantPanelClient({
   const deleteProduct = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("menu_items").delete().eq("id", id);
-      if (error) throw error;
+      if (error) {
+        await throwPanelError(
+          {
+            table: "menu_items",
+            action: "delete",
+            payload: { id }
+          },
+          error
+        );
+      }
     },
     onSuccess: async () => {
       setToast("Producto eliminado.");
