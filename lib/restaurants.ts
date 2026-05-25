@@ -867,8 +867,8 @@ export async function getGlobalCategories() {
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("categorias_globales_menu")
-    .select("*");
-    .order("sort_order", { ascending: true })
+    .select("*")
+    .order("sort_order", { ascending: true });
 
   if (error) {
     console.error("[MenuYa] categorias_globales_menu fetch error", {
