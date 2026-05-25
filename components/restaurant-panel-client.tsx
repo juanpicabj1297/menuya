@@ -7,10 +7,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
   CheckCircle2,
+  Pencil,
   LogOut,
   PackagePlus,
   Plus,
   Save,
+  Star,
   Settings,
   Store,
   Tags,
@@ -163,6 +165,7 @@ export function RestaurantPanelClient({
   const [activeTab, setActiveTab] = useState<TabId>("info");
   const [toast, setToast] = useState<string | null>(null);
   const [password, setPassword] = useState("");
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   function getErrorMessage(error: unknown) {
     if (error instanceof Error) {
@@ -668,7 +671,18 @@ export function RestaurantPanelClient({
       id: string;
       payload: Partial<MenuItem>;
     }) => {
-      const { error } = await supabase.from("menu_items").update(payload).eq("id", id);
+      const runUpdate = (currentPayload: Partial<MenuItem>) =>
+        supabase.from("menu_items").update(currentPayload).eq("id", id);
+      let { error } = await runUpdate(payload);
+
+      if (isMissingColumnError(error)) {
+        const { discount_price, promo_label, ...fallbackPayload } = payload;
+        void discount_price;
+        void promo_label;
+        const retry = await runUpdate(fallbackPayload);
+        error = retry.error;
+      }
+
       if (error) {
         await throwPanelError(
           {
@@ -957,26 +971,54 @@ export function RestaurantPanelClient({
             </p>
           </div>
           {dashboardData.products.map((product) => (
-            <ProductForm
-              key={product.id}
-              product={product}
-              categories={dashboardData.categories}
-              isSaving={saveProduct.isPending || quickUpdateProduct.isPending}
-              onSubmit={(formData) => saveProduct.mutate(formData)}
-              onDelete={() => deleteProduct.mutate(product.id)}
-            >
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <QuickButton onClick={() => quickUpdateProduct.mutate({ id: product.id, payload: { is_available: !product.is_available } })}>
-                  {product.is_available ? "Marcar agotado" : "Marcar disponible"}
-                </QuickButton>
-                <QuickButton onClick={() => quickUpdateProduct.mutate({ id: product.id, payload: { is_featured: !product.is_featured } })}>
-                  {product.is_featured ? "Quitar destacado" : "Destacar"}
-                </QuickButton>
-                <button type="button" onClick={() => deleteProduct.mutate(product.id)} className="rounded-2xl bg-red-50 px-3 py-2 text-sm font-black text-red-700">
-                  Eliminar
-                </button>
-              </div>
-            </ProductForm>
+            <div key={product.id} className="grid gap-3">
+              <CompactMenuItemCard
+                product={product}
+                categoryName={
+                  dashboardData.categories.find(
+                    (category) => category.id === product.category_id
+                  )?.name ?? "Sin categoria"
+                }
+                isSaving={quickUpdateProduct.isPending || deleteProduct.isPending}
+                onToggleAvailable={() =>
+                  quickUpdateProduct.mutate({
+                    id: product.id,
+                    payload: { is_available: !product.is_available }
+                  })
+                }
+                onToggleFeatured={() =>
+                  quickUpdateProduct.mutate({
+                    id: product.id,
+                    payload: { is_featured: !product.is_featured }
+                  })
+                }
+                onSavePricing={(price, discountPrice) =>
+                  quickUpdateProduct.mutate({
+                    id: product.id,
+                    payload: { price, discount_price: discountPrice }
+                  })
+                }
+                onEdit={() =>
+                  setEditingProductId((current) =>
+                    current === product.id ? null : product.id
+                  )
+                }
+                onDelete={() => deleteProduct.mutate(product.id)}
+              />
+              {editingProductId === product.id && (
+                <ProductForm
+                  product={product}
+                  categories={dashboardData.categories}
+                  isSaving={saveProduct.isPending}
+                  onSubmit={(formData) => {
+                    saveProduct.mutate(formData, {
+                      onSuccess: () => setEditingProductId(null)
+                    });
+                  }}
+                  onDelete={() => deleteProduct.mutate(product.id)}
+                />
+              )}
+            </div>
           ))}
           {dashboardData.products.length === 0 && (
             <div className="rounded-2xl bg-neutral-50 p-4 text-sm font-semibold text-neutral-500">
@@ -1048,6 +1090,164 @@ function Toggle({
   );
 }
 
+function CompactMenuItemCard({
+  product,
+  categoryName,
+  isSaving,
+  onToggleAvailable,
+  onToggleFeatured,
+  onSavePricing,
+  onEdit,
+  onDelete
+}: {
+  product: MenuItem;
+  categoryName: string;
+  isSaving?: boolean;
+  onToggleAvailable: () => void;
+  onToggleFeatured: () => void;
+  onSavePricing: (price: number, discountPrice: number | null) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [promoValue, setPromoValue] = useState(
+    product.discount_price ? String(product.discount_price) : ""
+  );
+  const [priceValue, setPriceValue] = useState(String(product.price));
+  const currentPrice = Math.max(0, moneyValue(priceValue));
+  const promoPrice = promoValue.trim() ? moneyValue(promoValue) : null;
+  const discountPercent =
+    promoPrice && promoPrice < currentPrice
+      ? Math.round(((currentPrice - promoPrice) / currentPrice) * 100)
+      : null;
+
+  return (
+    <article className="rounded-[1.4rem] border border-neutral-200 bg-white p-3 shadow-card">
+      <div className="flex gap-3">
+        {product.image_url ? (
+          <Image
+            src={product.image_url}
+            alt={product.name}
+            width={72}
+            height={72}
+            className="h-[72px] w-[72px] shrink-0 rounded-2xl object-cover"
+          />
+        ) : (
+          <div className="grid h-[72px] w-[72px] shrink-0 place-items-center rounded-2xl bg-neutral-100 text-xs font-black text-neutral-400">
+            Sin foto
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-black text-ink-950">
+                {product.name}
+              </h3>
+              <p className="mt-0.5 truncate text-xs font-bold text-neutral-500">
+                {categoryName}
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="text-sm font-black text-ink-950">
+                  ${currentPrice.toLocaleString("es-AR")}
+                </span>
+                {product.discount_price && (
+                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-black text-brand-700">
+                    ${product.discount_price.toLocaleString("es-AR")}
+                  </span>
+                )}
+                {discountPercent && (
+                  <span className="rounded-full bg-ink-950 px-2 py-0.5 text-[11px] font-black text-brand-500">
+                    {discountPercent}% OFF
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 gap-1">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="grid h-9 w-9 place-items-center rounded-xl bg-neutral-100 text-ink-950 transition hover:bg-brand-500"
+                aria-label="Editar producto"
+              >
+                <Pencil size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="grid h-9 w-9 place-items-center rounded-xl bg-red-50 text-red-700 transition hover:bg-red-100"
+                aria-label="Eliminar producto"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={onToggleAvailable}
+                className={`rounded-full px-3 py-1.5 text-xs font-black transition disabled:opacity-60 ${
+                  product.is_available
+                    ? "bg-brand-500 text-ink-950"
+                    : "bg-neutral-100 text-neutral-500"
+                }`}
+              >
+                {product.is_available ? "Disponible" : "Agotado"}
+              </button>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={onToggleFeatured}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-black transition disabled:opacity-60 ${
+                  product.is_featured
+                    ? "bg-ink-950 text-brand-500"
+                    : "bg-neutral-100 text-neutral-500"
+                }`}
+              >
+                <Star size={13} />
+                {product.is_featured ? "Destacado" : "Destacar"}
+              </button>
+            </div>
+
+            <form
+              className="grid grid-cols-[1fr_1fr_auto] items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSavePricing(currentPrice, promoPrice);
+              }}
+            >
+              <input
+                value={priceValue}
+                onChange={(event) => setPriceValue(event.target.value)}
+                inputMode="numeric"
+                placeholder="Precio"
+                className="min-w-0 rounded-xl border border-neutral-200 px-3 py-2 text-sm font-bold outline-none focus:border-brand-600"
+              />
+              <input
+                value={promoValue}
+                onChange={(event) => setPromoValue(event.target.value)}
+                inputMode="numeric"
+                placeholder="Precio promo"
+                className="min-w-0 rounded-xl border border-neutral-200 px-3 py-2 text-sm font-bold outline-none focus:border-brand-600"
+              />
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="rounded-xl bg-ink-950 px-3 py-2 text-xs font-black text-white disabled:opacity-60"
+              >
+                OK
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function ProductForm({
   product,
   categories,
@@ -1107,20 +1307,6 @@ function ProductForm({
         {isSaving ? "Guardando..." : product ? "Guardar producto" : "Crear producto"}
       </button>
     </form>
-  );
-}
-
-function QuickButton({
-  children,
-  onClick
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" onClick={onClick} className="rounded-2xl bg-neutral-100 px-3 py-2 text-sm font-black text-ink-950">
-      {children}
-    </button>
   );
 }
 
