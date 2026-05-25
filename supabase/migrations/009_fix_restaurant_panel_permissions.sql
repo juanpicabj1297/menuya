@@ -14,9 +14,6 @@ add column if not exists manual_is_open boolean;
 alter table public.restaurant_profiles
 add column if not exists pickup_enabled boolean not null default true;
 
-alter table public.restaurant_profiles
-add column if not exists estimated_time text;
-
 alter table public.menu_items
 add column if not exists is_featured boolean not null default false;
 

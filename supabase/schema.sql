@@ -27,7 +27,6 @@ create table public.restaurant_profiles (
   delivery_enabled boolean not null default true,
   pickup_enabled boolean not null default true,
   manual_is_open boolean,
-  estimated_time text,
   created_at timestamptz not null default now(),
   unique (owner_user_id)
 );
@@ -139,6 +138,9 @@ alter table public.menu_items enable row level security;
 alter table public.horarios_restaurantes enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
+
+grant select on public.horarios_restaurantes to anon, authenticated;
+grant insert, update, delete on public.horarios_restaurantes to authenticated;
 
 create policy "Anyone can read cities"
 on public.cities for select

@@ -11,7 +11,6 @@ export const fallbackRestaurants: RestaurantWithMenu[] = [
     scheduleStatus: "unknown",
     scheduleLabel: "Consultar horario",
     scheduleHint: null,
-    deliveryTime: "30-45 min",
     rating: "4.8",
     cover:
       "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=900&q=80",
@@ -56,7 +55,6 @@ export const fallbackRestaurants: RestaurantWithMenu[] = [
     scheduleStatus: "unknown",
     scheduleLabel: "Consultar horario",
     scheduleHint: null,
-    deliveryTime: "25-40 min",
     rating: "4.7",
     cover:
       "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=80",
@@ -101,7 +99,6 @@ export const fallbackRestaurants: RestaurantWithMenu[] = [
     scheduleStatus: "unknown",
     scheduleLabel: "Consultar horario",
     scheduleHint: null,
-    deliveryTime: "35-50 min",
     rating: "4.6",
     cover:
       "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=900&q=80",

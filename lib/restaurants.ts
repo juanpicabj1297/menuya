@@ -18,7 +18,6 @@ type RestaurantRow = {
   phone: string | null;
   whatsapp: string | null;
   manual_is_open: boolean | null;
-  estimated_time: string | null;
   image_url: string | null;
   logo_url: string | null;
   rating: number | null;
@@ -62,7 +61,6 @@ type MenuItemRow = {
         phone?: string | null;
         whatsapp?: string | null;
         manual_is_open?: boolean | null;
-        estimated_time?: string | null;
         image_url?: string | null;
         logo_url: string | null;
         rating?: number | null;
@@ -78,7 +76,6 @@ type MenuItemRow = {
         phone?: string | null;
         whatsapp?: string | null;
         manual_is_open?: boolean | null;
-        estimated_time?: string | null;
         image_url?: string | null;
         logo_url: string | null;
         rating?: number | null;
@@ -104,7 +101,6 @@ export type RestaurantSummary = {
   scheduleStatus: "open" | "closed" | "unknown";
   scheduleLabel: string;
   scheduleHint: string | null;
-  deliveryTime: string;
   rating: string | null;
   cover: string;
   logoUrl: string | null;
@@ -115,6 +111,20 @@ export type RestaurantSummary = {
     slug: string;
   };
   hours: RestaurantHour[];
+  searchKeywords?: string[];
+};
+
+export type SearchableMenuItem = MenuItem & {
+  restaurant: {
+    id: string;
+    name: string;
+    slug: string;
+    phone: string | null;
+    logoUrl: string | null;
+    scheduleStatus: "open" | "closed" | "unknown";
+    scheduleLabel: string;
+  };
+  searchKeywords: string[];
 };
 
 export type RestaurantHour = {
@@ -178,10 +188,10 @@ const dayLabels = [
   "Domingo",
   "Lunes",
   "Martes",
-  "Miercoles",
+  "Miércoles",
   "Jueves",
   "Viernes",
-  "Sabado"
+  "Sábado"
 ];
 
 const dayNameToIndex: Record<string, number> = {
@@ -447,7 +457,6 @@ function mapRestaurant(row: RestaurantRow, hours: RestaurantHour[] = []): Restau
     scheduleStatus: schedule.scheduleStatus,
     scheduleLabel: schedule.scheduleLabel,
     scheduleHint: schedule.scheduleHint,
-    deliveryTime: row.estimated_time ?? "Horario a confirmar",
     rating: row.rating === null ? null : row.rating.toFixed(1),
     cover: row.image_url ?? DEFAULT_RESTAURANT_IMAGE,
     logoUrl: row.logo_url,
@@ -594,7 +603,6 @@ function normalizeRestaurantFromMenuItem(row: MenuItemRow): RestaurantRow | null
     phone: restaurant.phone ?? null,
     whatsapp: restaurant.whatsapp ?? null,
     manual_is_open: restaurant.manual_is_open ?? null,
-    estimated_time: restaurant.estimated_time ?? null,
     image_url: restaurant.image_url ?? null,
     logo_url: restaurant.logo_url ?? null,
     rating: restaurant.rating ?? null,
@@ -630,11 +638,33 @@ async function getHoursByRestaurants(restaurants: RestaurantRow[]) {
   }
 
   const supabase = createPublicClient();
+  const restaurantIds = restaurants.map((restaurant) => restaurant.id);
   const { data, error } = await supabase
     .from("horarios_restaurantes")
-    .select("*");
+    .select("id, restaurante, dia_semana, horario_apertura, horario_cierre")
+    .in("restaurante", restaurantIds);
 
-  const rows = error ? [] : ((data ?? []) as RestaurantHoursRow[]);
+  if (error) {
+    console.error("[MenuYa hours] horarios_restaurantes fetch error", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      restaurantIds
+    });
+
+    return new Map<string, RestaurantHour[]>();
+  }
+
+  const rows = (data ?? []) as RestaurantHoursRow[];
+
+  if (rows.length === 0) {
+    console.info("[MenuYa hours] horarios_restaurantes fetch result", {
+      count: 0,
+      restaurantIds
+    });
+  }
+
   const restaurantLookup = new Map<string, string>();
 
   restaurants.forEach((restaurant) => {
@@ -679,6 +709,121 @@ async function getHoursByRestaurant(restaurant: RestaurantRow) {
   return hours.get(restaurant.id) ?? [];
 }
 
+async function getGlobalCategoryNamesById() {
+  const categories = await getGlobalCategories();
+
+  return new Map(categories.map((category) => [String(category.id), category.name]));
+}
+
+async function getRestaurantSearchKeywords(restaurants: RestaurantRow[]) {
+  if (restaurants.length === 0) {
+    return new Map<string, string[]>();
+  }
+
+  const supabase = createPublicClient();
+  const [globalCategoryNames, menuItemsResult, bridgeResult] = await Promise.all([
+    getGlobalCategoryNamesById(),
+    supabase
+    .from("menu_items")
+    .select(
+      `
+        restaurant_id,
+        name,
+        description,
+        categoria_global_id,
+        menu_categories (
+          name
+        )
+      `
+    )
+    .in(
+      "restaurant_id",
+      restaurants.map((restaurant) => restaurant.id)
+      )
+      .eq("is_available", true),
+    supabase
+      .from("restaurant_global_categories")
+      .select("restaurant_id, categoria_global_id")
+      .in(
+        "restaurant_id",
+        restaurants.map((restaurant) => restaurant.id)
+      )
+  ]);
+  const { data, error } = menuItemsResult;
+
+  if (error || !data) {
+    console.error("[MenuYa search] menu item keywords error", error);
+  }
+
+  const keywordsByRestaurant = new Map<string, Set<string>>();
+
+  ((data ?? []) as unknown as Record<string, unknown>[]).forEach((row) => {
+    const restaurantId = getIdentifierValue(row, ["restaurant_id"]);
+
+    if (!restaurantId) {
+      return;
+    }
+
+    const keywords = keywordsByRestaurant.get(restaurantId) ?? new Set<string>();
+    const localCategory = Array.isArray(row.menu_categories)
+      ? row.menu_categories[0]
+      : row.menu_categories;
+    const globalCategoryId = getIdentifierValue(row, ["categoria_global_id"]);
+    const globalCategoryName = globalCategoryId
+      ? globalCategoryNames.get(globalCategoryId)
+      : null;
+
+    [
+      getStringValue(row, ["name"]),
+      getStringValue(row, ["description"]),
+      localCategory && typeof localCategory === "object"
+        ? getStringValue(localCategory as Record<string, unknown>, ["name"])
+        : null,
+      globalCategoryName
+    ]
+      .filter((value): value is string => Boolean(value))
+      .forEach((value) => keywords.add(value));
+
+    keywordsByRestaurant.set(restaurantId, keywords);
+  });
+
+  if (!bridgeResult.error && bridgeResult.data) {
+    (bridgeResult.data as unknown as Record<string, unknown>[]).forEach((row) => {
+      const restaurantId = getIdentifierValue(row, ["restaurant_id"]);
+      const categoryId = getIdentifierValue(row, ["categoria_global_id"]);
+      const categoryName = categoryId ? globalCategoryNames.get(categoryId) : null;
+
+      if (!restaurantId || !categoryName) {
+        return;
+      }
+
+      const keywords = keywordsByRestaurant.get(restaurantId) ?? new Set<string>();
+      keywords.add(categoryName);
+      keywordsByRestaurant.set(restaurantId, keywords);
+    });
+  }
+
+  return new Map(
+    [...keywordsByRestaurant.entries()].map(([restaurantId, keywords]) => [
+      restaurantId,
+      [...keywords]
+    ])
+  );
+}
+
+async function getRestaurantSummariesByRows(restaurants: RestaurantRow[]) {
+  const hoursByRestaurant = await getHoursByRestaurants(restaurants);
+  return new Map(
+    restaurants.map((restaurant) => {
+      const summary = mapRestaurant(
+        restaurant,
+        hoursByRestaurant.get(restaurant.id) ?? []
+      );
+      return [restaurant.id, summary];
+    })
+  );
+}
+
 export async function getCurrentRestaurantSession(): Promise<CurrentRestaurantSession | null> {
   const supabase = await createClient();
   const {
@@ -719,7 +864,6 @@ export async function getRestaurantsByCity(citySlug = DEFAULT_CITY_SLUG) {
         phone,
         whatsapp,
         manual_is_open,
-        estimated_time,
         image_url,
         logo_url,
         rating,
@@ -744,11 +888,14 @@ export async function getRestaurantsByCity(citySlug = DEFAULT_CITY_SLUG) {
   }
 
   const restaurantRows = data as unknown as RestaurantRow[];
-  const hoursByRestaurant = await getHoursByRestaurants(restaurantRows);
+  const restaurantSummaries = await getRestaurantSummariesByRows(restaurantRows);
+  const keywordsByRestaurant = await getRestaurantSearchKeywords(restaurantRows);
   const restaurants = restaurantRows
-    .map((restaurant) =>
-      mapRestaurant(restaurant, hoursByRestaurant.get(restaurant.id) ?? [])
-    )
+    .map((restaurant) => ({
+      ...(restaurantSummaries.get(restaurant.id) ??
+        mapRestaurant(restaurant)),
+      searchKeywords: keywordsByRestaurant.get(restaurant.id) ?? []
+    }))
     .sort((a, b) => Number(b.isOpen) - Number(a.isOpen));
 
   if (restaurants.length === 0 && citySlug === DEFAULT_CITY_SLUG) {
@@ -756,6 +903,132 @@ export async function getRestaurantsByCity(citySlug = DEFAULT_CITY_SLUG) {
   }
 
   return restaurants;
+}
+
+export async function getSearchableMenuItems(citySlug = DEFAULT_CITY_SLUG) {
+  const supabase = createPublicClient();
+  const globalCategoryNames = await getGlobalCategoryNamesById();
+  const loadItems = (includePromoFields: boolean) =>
+    supabase
+      .from("menu_items")
+      .select(
+        `
+          id,
+          name,
+          description,
+          price,
+          ${includePromoFields ? "discount_price, promo_label," : ""}
+          image_url,
+          is_available,
+          categoria_global_id,
+          restaurant_profiles!inner (
+            id,
+            name,
+            slug,
+            phone,
+            whatsapp,
+            logo_url,
+            cities!inner (
+              slug
+            )
+          ),
+          menu_categories (
+            name,
+            sort_order
+          )
+        `
+      )
+      .eq("is_available", true)
+      .eq("restaurant_profiles.cities.slug", citySlug)
+      .limit(250);
+  let { data, error } = await loadItems(true);
+
+  if (error?.code === "42703") {
+    const retry = await loadItems(false);
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data?.length) {
+    return fallbackRestaurants.flatMap((restaurant) =>
+      restaurant.menu.map((item) => ({
+        ...item,
+        restaurantId: restaurant.id,
+        restaurantName: restaurant.name,
+        restaurantLogoUrl: restaurant.logoUrl,
+        restaurantSlug: restaurant.slug,
+        restaurantPhone: restaurant.phone,
+        restaurant: {
+          id: restaurant.id,
+          name: restaurant.name,
+          slug: restaurant.slug,
+          phone: restaurant.phone,
+          logoUrl: restaurant.logoUrl,
+          scheduleStatus: restaurant.scheduleStatus,
+          scheduleLabel: restaurant.scheduleLabel
+        },
+        searchKeywords: [
+          item.name,
+          item.description,
+          item.categoryName,
+          restaurant.name
+        ]
+      }))
+    );
+  }
+
+  const rows = data as unknown as MenuItemRow[];
+  const restaurantRowsById = new Map<string, RestaurantRow>();
+
+  rows.forEach((row) => {
+    const restaurant = normalizeRestaurantFromMenuItem(row);
+
+    if (restaurant) {
+      restaurantRowsById.set(restaurant.id, restaurant);
+    }
+  });
+
+  const restaurantSummaries = await getRestaurantSummariesByRows([
+    ...restaurantRowsById.values()
+  ]);
+
+  return rows.map((row) => {
+    const item = mapMenuItem(row);
+    const restaurant = getMenuItemRestaurant(row);
+    const restaurantSummary = item.restaurantId
+      ? restaurantSummaries.get(item.restaurantId)
+      : null;
+    const localCategory = Array.isArray(row.menu_categories)
+      ? row.menu_categories[0]
+      : row.menu_categories;
+    const globalCategoryId = row.categoria_global_id
+      ? String(row.categoria_global_id)
+      : null;
+    const globalCategoryName = globalCategoryId
+      ? globalCategoryNames.get(globalCategoryId)
+      : null;
+
+    return {
+      ...item,
+      restaurant: {
+        id: restaurant?.id ?? item.restaurantId ?? "",
+        name: restaurant?.name ?? item.restaurantName ?? "Restaurante",
+        slug: restaurant?.slug ?? item.restaurantSlug ?? "",
+        phone: restaurant?.whatsapp ?? restaurant?.phone ?? item.restaurantPhone ?? null,
+        logoUrl: restaurant?.logo_url ?? item.restaurantLogoUrl ?? null,
+        scheduleStatus: restaurantSummary?.scheduleStatus ?? "unknown",
+        scheduleLabel: restaurantSummary?.scheduleLabel ?? "Consultar horario"
+      },
+      searchKeywords: [
+        item.name,
+        item.description,
+        item.categoryName,
+        restaurant?.name,
+        localCategory?.name,
+        globalCategoryName
+      ].filter((value): value is string => Boolean(value))
+    };
+  });
 }
 
 export async function getFeaturedRestaurants(citySlug = DEFAULT_CITY_SLUG) {
@@ -777,7 +1050,6 @@ export async function getRestaurantWithMenu(slug: string) {
         phone,
         whatsapp,
         manual_is_open,
-        estimated_time,
         image_url,
         logo_url,
         rating,
@@ -994,7 +1266,6 @@ export async function getProductsByGlobalCategory(
             phone,
             whatsapp,
             manual_is_open,
-            estimated_time,
             image_url,
             logo_url,
             rating,

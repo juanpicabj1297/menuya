@@ -34,8 +34,7 @@ insert into public.restaurant_profiles (
   tags,
   is_open,
   delivery_enabled,
-  pickup_enabled,
-  estimated_time
+  pickup_enabled
 )
 select
   cities.id,
@@ -50,8 +49,7 @@ select
   restaurant.tags,
   restaurant.is_open,
   true,
-  true,
-  restaurant.estimated_time
+  true
 from public.cities
 cross join (
   values
@@ -65,8 +63,7 @@ cross join (
       '/restaurants/la-esquina-logo.svg',
       4.8::numeric,
       array['Familiar', 'Delivery propio', 'Mas pedido'],
-      true,
-      '30-45 min'
+      true
     ),
     (
       'Burger Suipacha',
@@ -78,8 +75,7 @@ cross join (
       '/restaurants/burger-suipacha-logo.svg',
       4.7::numeric,
       array['Rapido', 'Combos', 'Abierto'],
-      true,
-      '25-40 min'
+      true
     ),
     (
       'Rotiseria Centro',
@@ -91,8 +87,7 @@ cross join (
       '/restaurants/rotiseria-centro-logo.svg',
       4.6::numeric,
       array['Casero', 'Retiro', 'Menu del dia'],
-      true,
-      '35-50 min'
+      true
     )
 ) as restaurant (
   name,
@@ -104,8 +99,7 @@ cross join (
   logo_url,
   rating,
   tags,
-  is_open,
-  estimated_time
+  is_open
 )
 where cities.slug = 'suipacha'
 on conflict (slug) do update set
@@ -118,8 +112,7 @@ on conflict (slug) do update set
   tags = excluded.tags,
   is_open = excluded.is_open,
   delivery_enabled = excluded.delivery_enabled,
-  pickup_enabled = excluded.pickup_enabled,
-  estimated_time = excluded.estimated_time;
+  pickup_enabled = excluded.pickup_enabled;
 
 insert into public.menu_categories (restaurant_id, name, sort_order)
 select restaurants.id, category.name, category.sort_order

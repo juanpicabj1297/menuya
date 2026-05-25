@@ -39,7 +39,6 @@ type RestaurantProfile = {
   category: string | null;
   image_url: string | null;
   logo_url: string | null;
-  estimated_time: string | null;
   delivery_enabled: boolean;
   pickup_enabled: boolean;
   manual_is_open: boolean | null;
@@ -98,6 +97,12 @@ type PanelDebugContext = {
   payload?: unknown;
 };
 
+type HourFormState = {
+  dia_semana: string;
+  horario_apertura: string;
+  horario_cierre: string;
+};
+
 const tabs = [
   { id: "info", label: "Informacion", icon: Store },
   { id: "hours", label: "Horarios", icon: CalendarDays },
@@ -118,6 +123,12 @@ const days = [
   "sabado",
   "domingo"
 ];
+
+const emptyHourForm: HourFormState = {
+  dia_semana: days[0],
+  horario_apertura: "",
+  horario_cierre: ""
+};
 
 function moneyValue(value: FormDataEntryValue | null) {
   return Math.max(0, Math.round(Number(String(value ?? "0") || "0")));
@@ -166,6 +177,8 @@ export function RestaurantPanelClient({
   const [toast, setToast] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editingHourId, setEditingHourId] = useState<string | null>(null);
+  const [hourForm, setHourForm] = useState<HourFormState>(emptyHourForm);
 
   function getErrorMessage(error: unknown) {
     if (error instanceof Error) {
@@ -403,7 +416,6 @@ export function RestaurantPanelClient({
         phone: String(formData.get("phone") ?? "").trim() || null,
         whatsapp: String(formData.get("whatsapp") ?? "").trim() || null,
         category: String(formData.get("category") ?? "").trim() || null,
-        estimated_time: String(formData.get("estimated_time") ?? "").trim() || null,
         delivery_enabled: formData.get("delivery_enabled") === "on",
         pickup_enabled: formData.get("pickup_enabled") === "on",
         manual_is_open:
@@ -458,13 +470,13 @@ export function RestaurantPanelClient({
   });
 
   const addHour = useMutation({
-    mutationFn: async (formData: FormData) => {
+    mutationFn: async (values: HourFormState) => {
       if (!restaurantId) throw new Error("No hay restaurante cargado.");
       const payload = {
         restaurante: restaurantId,
-        dia_semana: String(formData.get("dia_semana") ?? ""),
-        horario_apertura: String(formData.get("horario_apertura") ?? ""),
-        horario_cierre: String(formData.get("horario_cierre") ?? "")
+        dia_semana: values.dia_semana,
+        horario_apertura: values.horario_apertura,
+        horario_cierre: values.horario_cierre
       };
 
       const { error } = await supabase.from("horarios_restaurantes").insert(payload);
@@ -482,6 +494,45 @@ export function RestaurantPanelClient({
     },
     onSuccess: async () => {
       setToast("Horario agregado.");
+      setHourForm(emptyHourForm);
+      await queryClient.invalidateQueries({ queryKey: ["restaurant-hours", restaurantId] });
+    },
+    onError: showError
+  });
+
+  const updateHour = useMutation({
+    mutationFn: async ({
+      id,
+      values
+    }: {
+      id: string;
+      values: HourFormState;
+    }) => {
+      const payload = {
+        dia_semana: values.dia_semana,
+        horario_apertura: values.horario_apertura,
+        horario_cierre: values.horario_cierre
+      };
+      const { error } = await supabase
+        .from("horarios_restaurantes")
+        .update(payload)
+        .eq("id", id);
+
+      if (error) {
+        await throwPanelError(
+          {
+            table: "horarios_restaurantes",
+            action: "update",
+            payload: { id, ...payload }
+          },
+          error
+        );
+      }
+    },
+    onSuccess: async () => {
+      setToast("Horario actualizado.");
+      setEditingHourId(null);
+      setHourForm(emptyHourForm);
       await queryClient.invalidateQueries({ queryKey: ["restaurant-hours", restaurantId] });
     },
     onError: showError
@@ -503,6 +554,10 @@ export function RestaurantPanelClient({
     },
     onSuccess: async () => {
       setToast("Horario eliminado.");
+      if (editingHourId) {
+        setEditingHourId(null);
+        setHourForm(emptyHourForm);
+      }
       await queryClient.invalidateQueries({ queryKey: ["restaurant-hours", restaurantId] });
     },
     onError: showError
@@ -833,7 +888,6 @@ export function RestaurantPanelClient({
             <Field name="category" label="Categoria principal" defaultValue={profile.category ?? ""} />
             <Field name="phone" label="Telefono" defaultValue={profile.phone ?? ""} />
             <Field name="whatsapp" label="WhatsApp" defaultValue={profile.whatsapp ?? ""} />
-            <Field name="estimated_time" label="Tiempo estimado" defaultValue={profile.estimated_time ?? ""} placeholder="Ej: 30-45 min" />
             <div>
               <InputLabel>Estado manual</InputLabel>
               <select name="manual_is_open" defaultValue={profile.manual_is_open === null ? "auto" : profile.manual_is_open ? "open" : "closed"} className="mt-2 w-full rounded-2xl border border-neutral-200 px-3 py-3 outline-none focus:border-brand-600">
@@ -878,22 +932,90 @@ export function RestaurantPanelClient({
             className="rounded-[1.7rem] border border-neutral-200 bg-white p-4 shadow-card"
             onSubmit={(event) => {
               event.preventDefault();
-              addHour.mutate(new FormData(event.currentTarget));
-              event.currentTarget.reset();
+              if (editingHourId) {
+                updateHour.mutate({ id: editingHourId, values: hourForm });
+                return;
+              }
+
+              addHour.mutate(hourForm);
             }}
           >
-            <h2 className="text-xl font-black text-ink-950">Horarios</h2>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-black text-ink-950">Horarios</h2>
+                {editingHourId && (
+                  <p className="mt-1 text-sm font-semibold text-neutral-500">
+                    Editando una franja existente.
+                  </p>
+                )}
+              </div>
+              {editingHourId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingHourId(null);
+                    setHourForm(emptyHourForm);
+                  }}
+                  className="rounded-xl bg-neutral-100 px-3 py-2 text-xs font-black text-neutral-600 transition hover:bg-neutral-200"
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <select name="dia_semana" className="rounded-2xl border border-neutral-200 px-3 py-3">
+              <select
+                name="dia_semana"
+                value={hourForm.dia_semana}
+                onChange={(event) =>
+                  setHourForm((current) => ({
+                    ...current,
+                    dia_semana: event.target.value
+                  }))
+                }
+                className="rounded-2xl border border-neutral-200 px-3 py-3"
+              >
                 {days.map((day) => (
                   <option key={day} value={day}>{day}</option>
                 ))}
               </select>
-              <input name="horario_apertura" type="time" required className="rounded-2xl border border-neutral-200 px-3 py-3" />
-              <input name="horario_cierre" type="time" required className="rounded-2xl border border-neutral-200 px-3 py-3" />
-              <button disabled={addHour.isPending} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink-950 px-4 py-3 font-bold text-white disabled:opacity-60">
-                <Plus size={17} />
-                {addHour.isPending ? "Agregando..." : "Agregar"}
+              <input
+                name="horario_apertura"
+                type="time"
+                required
+                value={hourForm.horario_apertura}
+                onChange={(event) =>
+                  setHourForm((current) => ({
+                    ...current,
+                    horario_apertura: event.target.value
+                  }))
+                }
+                className="rounded-2xl border border-neutral-200 px-3 py-3"
+              />
+              <input
+                name="horario_cierre"
+                type="time"
+                required
+                value={hourForm.horario_cierre}
+                onChange={(event) =>
+                  setHourForm((current) => ({
+                    ...current,
+                    horario_cierre: event.target.value
+                  }))
+                }
+                className="rounded-2xl border border-neutral-200 px-3 py-3"
+              />
+              <button
+                disabled={addHour.isPending || updateHour.isPending}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink-950 px-4 py-3 font-bold text-white disabled:opacity-60"
+              >
+                {editingHourId ? <Save size={17} /> : <Plus size={17} />}
+                {updateHour.isPending
+                  ? "Guardando..."
+                  : addHour.isPending
+                    ? "Agregando..."
+                    : editingHourId
+                      ? "Guardar cambios"
+                      : "Agregar"}
               </button>
             </div>
           </form>
@@ -905,9 +1027,31 @@ export function RestaurantPanelClient({
                 <span className="text-sm font-semibold text-neutral-500">
                   {hour.horario_apertura.slice(0, 5)} a {hour.horario_cierre.slice(0, 5)}
                 </span>
-                <button type="button" onClick={() => deleteHour.mutate(hour.id)} className="rounded-xl bg-neutral-100 p-2 text-neutral-600">
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingHourId(hour.id);
+                      setHourForm({
+                        dia_semana: hour.dia_semana,
+                        horario_apertura: hour.horario_apertura.slice(0, 5),
+                        horario_cierre: hour.horario_cierre.slice(0, 5)
+                      });
+                    }}
+                    className="rounded-xl bg-neutral-100 p-2 text-neutral-600 transition hover:bg-brand-50 hover:text-ink-950"
+                    aria-label="Editar horario"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteHour.mutate(hour.id)}
+                    className="rounded-xl bg-neutral-100 p-2 text-neutral-600 transition hover:bg-neutral-200"
+                    aria-label="Eliminar horario"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

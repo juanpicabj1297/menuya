@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, Clock3, Star } from "lucide-react";
+import { ArrowLeft, CalendarDays, Star } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { CartLink } from "@/components/cart-link";
 import { MenuItemCard } from "@/components/menu-item-card";
@@ -49,7 +49,7 @@ export default async function RestaurantMenuPage({ params, searchParams }: Props
   const hoursByDay = restaurant.hours.reduce<
     { day: string; intervals: string[]; order: number }[]
   >((groups, hour) => {
-    const interval = `${hour.openTime}-${hour.closeTime}`;
+    const interval = `${hour.openTime} a ${hour.closeTime}`;
     const group = groups.find((current) => current.day === hour.dayLabel);
 
     if (group) {
@@ -114,10 +114,6 @@ export default async function RestaurantMenuPage({ params, searchParams }: Props
                 {restaurant.rating}
               </span>
             )}
-            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1.5 text-ink-950">
-              <Clock3 size={13} />
-              {restaurant.deliveryTime}
-            </span>
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 ${
                 restaurant.scheduleStatus === "open"
